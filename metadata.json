@@ -1,0 +1,5 @@
+{
+  "name": "SisVEZ Dashboard",
+  "description": "A modern, responsive dashboard interface for the SisVEZ system, built with React and Tailwind CSS. It provides a clear and intuitive navigation for various health and administrative modules.",
+  "requestFramePermissions": []
+}
