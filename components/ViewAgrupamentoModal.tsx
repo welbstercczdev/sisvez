@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect } from 'react'; 
 import { XIcon } from './icons/IconComponents';
 import { Agrupamento } from '../types';
 
@@ -16,6 +16,32 @@ const DetailItem: React.FC<{ label: string, value: string | number | undefined }
 );
 
 const ViewAgrupamentoModal: React.FC<ViewAgrupamentoModalProps> = ({ isOpen, onClose, agrupamento }) => {
+
+    /**
+     * Função para formatar a data de ISO (yyyy-mm-ddT...) para dd/mm/yyyy.
+     * @param dateString A data em formato de string.
+     * @returns A data formatada ou a string original se o formato for inesperado.
+     */
+    const formatDate = (dateString: string): string => {
+        if (!dateString) return 'Não informado';
+
+        // Se a data já estiver no formato dd/mm/yyyy, não faz nada.
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
+            return dateString;
+        }
+
+        const date = new Date(dateString);
+        // Verifica se a data é válida
+        if (isNaN(date.getTime())) {
+            return dateString; // Retorna o original se a data for inválida
+        }
+        
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0'); // Mês é base 0, então +1
+        const year = date.getFullYear();
+        
+        return `${day}/${month}/${year}`;
+    };
 
     useEffect(() => {
         const handleEsc = (event: KeyboardEvent) => {
@@ -45,9 +71,11 @@ const ViewAgrupamentoModal: React.FC<ViewAgrupamentoModalProps> = ({ isOpen, onC
                         <div className="sm:col-span-2 md:col-span-3">
                            <DetailItem label="Nome" value={agrupamento.nome} />
                         </div>
-                        <DetailItem label="Data" value={agrupamento.data} />
+                        {/* AQUI A FUNÇÃO DE FORMATAÇÃO É APLICADA */}
+                        <DetailItem label="Data" value={formatDate(agrupamento.data)} />
                         <DetailItem label="Região" value={agrupamento.regiao} />
-                        <DetailItem label="Área (m²)" value={agrupamento.area.toLocaleString('pt-BR')} />
+                        {/* Tratamento para garantir que 'area' seja um número antes de formatar */}
+                        <DetailItem label="Área (m²)" value={agrupamento.area ? Number(agrupamento.area).toLocaleString('pt-BR') : 'Não informado'} />
                         <DetailItem label="Total de Notificações" value={agrupamento.totalNotificacoes} />
                         <DetailItem label="Pontuação Total" value={agrupamento.pontuacaoTotal} />
                         <div className="sm:col-span-2 md:col-span-3 pt-4 border-t border-slate-200 dark:border-slate-700">
