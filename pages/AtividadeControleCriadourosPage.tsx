@@ -30,7 +30,7 @@ const AtividadeControleCriadourosPage: React.FC<AtividadeControleCriadourosPageP
             const quadrasCount = quadras ? quadras.split(',').filter(Boolean).length : 0;
             setFormData(prev => ({
                 ...prev,
-                dataCC: notification.NOTIF_DT,
+                dataCC: notification.NOTIF_DT, // Idealmente, converter de DD/MM/AAAA para AAAA-MM-DD se necessário
                 relacaoQuadras: quadras,
                 totalQuadras: quadrasCount
             }));
@@ -104,7 +104,10 @@ const AtividadeControleCriadourosPage: React.FC<AtividadeControleCriadourosPageP
                     <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); alert('Programação salva!'); }}>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                             <FormField label="Número da notificação">
-                                <input type="text" value={`DP ${notification.ID}`} disabled className="w-full bg-slate-100 dark:bg-slate-700/50 border-slate-300 dark:border-slate-600 rounded-md p-2 text-sm" />
+                                {/* ====================== MODIFICAÇÃO APLICADA AQUI ====================== */}
+                                {/* O valor agora combina o ID e os dois últimos dígitos do ANO. */}
+                                <input type="text" value={`${notification.ID}/${String(notification.ANO).slice(-2)}`} disabled className="w-full bg-slate-100 dark:bg-slate-700/50 border-slate-300 dark:border-slate-600 rounded-md p-2 text-sm" />
+                                {/* ======================================================================= */}
                             </FormField>
                             <FormField label="Agravo"><input type="text" value={notification.AGRAVO} disabled className="w-full bg-slate-100 dark:bg-slate-700/50 border-slate-300 dark:border-slate-600 rounded-md p-2 text-sm" /></FormField>
                             <FormField label="Data CC">
