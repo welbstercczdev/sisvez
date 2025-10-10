@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-// 1. IMPORTAR A BIBLIOTECA DE TOASTS
 import toast, { Toaster } from 'react-hot-toast';
 import { 
     HomeIcon, 
@@ -14,7 +13,6 @@ import AgrupamentosDataTable from '../components/AgrupamentosDataTable';
 import ViewAgrupamentoModal from '../components/ViewAgrupamentoModal';
 import SearchAgrupamentosModal, { SearchAgrupamentosCriteria } from '../components/SearchAgrupamentosModal';
 
-// ... (O componente ActionCard permanece exatamente o mesmo)
 interface AgrupamentosPageProps {
     onNavigate: (page: string) => void;
 }
@@ -39,7 +37,8 @@ const ActionCard: React.FC<ActionCardProps> = ({ icon: Icon, title, onClick, dis
 
 
 const AgrupamentosPage: React.FC<AgrupamentosPageProps> = ({ onNavigate }) => {
-    const API_URL = 'https://script.google.com/macros/s/AKfycbxydZRITveayyGKhY4ZPOfxXbMKEvW2c7yS81PMOHU68JbBVxqDNyRHpzq9HWj_17Sf/exec';
+    // A URL agora é a mesma para todas as APIs
+    const API_URL = 'https://script.google.com/macros/s/AKfycbyotEdB0INfTNUK9q6MKbHEMQFUzwi5rMYnfZ6tQ7OaQ4ojOa9J3ItXqNsjjEl4XqN0/exec';
 
     const [isImportModalOpen, setImportModalOpen] = useState(false);
     const [isSearchModalOpen, setSearchModalOpen] = useState(false);
@@ -61,10 +60,15 @@ const AgrupamentosPage: React.FC<AgrupamentosPageProps> = ({ onNavigate }) => {
         setViewModalOpen(true);
     };
 
-    // 3. SUBSTITUIR OS ALERTS POR TOASTS
+    // --- FUNÇÃO DE BUSCA ATUALIZADA ---
     const handleSearch = async (criteria: SearchAgrupamentosCriteria) => {
-        const searchingToast = toast.loading('Pesquisando...'); // Mostra um toast de carregamento
+        const searchingToast = toast.loading('Pesquisando...');
         const finalUrl = new URL(API_URL);
+        
+        // Adiciona o parâmetro 'api' para o roteador do backend
+        finalUrl.searchParams.append('api', 'agrupamentos');
+
+        // Adiciona os outros critérios de busca
         if (criteria.nome) finalUrl.searchParams.append('nome', criteria.nome);
         if (criteria.regiao) finalUrl.searchParams.append('regiao', criteria.regiao);
         if (criteria.startDate) finalUrl.searchParams.append('startDate', criteria.startDate);
@@ -75,12 +79,12 @@ const AgrupamentosPage: React.FC<AgrupamentosPageProps> = ({ onNavigate }) => {
             const result = await response.json();
             if (result.success) {
                 setTableData(result.data);
-                toast.success(`${result.data.length} registro(s) encontrado(s).`, { id: searchingToast }); // Atualiza o toast para sucesso
+                toast.success(`${result.data.length} registro(s) encontrado(s).`, { id: searchingToast });
             } else { 
                 throw new Error(result.error || "Falha ao buscar dados."); 
             }
         } catch (error: any) {
-            toast.error(`Erro ao buscar dados: ${error.message}`, { id: searchingToast }); // Atualiza o toast para erro
+            toast.error(`Erro ao buscar dados: ${error.message}`, { id: searchingToast });
         } finally {
             setSearchModalOpen(false);
         }
@@ -88,7 +92,7 @@ const AgrupamentosPage: React.FC<AgrupamentosPageProps> = ({ onNavigate }) => {
 
     const handleExport = () => {
         if (selectedRows.length === 0) {
-            toast.error("Nenhum agrupamento selecionado para exportar."); // SUBSTITUÍDO
+            toast.error("Nenhum agrupamento selecionado para exportar.");
             return;
         }
         const dataToExport = tableData.filter(item => selectedRows.includes(item.nome));
@@ -106,58 +110,63 @@ const AgrupamentosPage: React.FC<AgrupamentosPageProps> = ({ onNavigate }) => {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        toast.success(`${dataToExport.length} agrupamento(s) exportado(s)!`); // NOVO TOAST
+        toast.success(`${dataToExport.length} agrupamento(s) exportado(s)!`);
     };
 
-    const handleSaveToBase = async () => {
-        if (tableData.length === 0) {
-            // Este alerta pode ser mantido ou trocado por um toast.error
-            toast.error("Não há dados na tabela para salvar.");
-            return;
-        }
-        
-        // Usando o toast para confirmação (mais avançado)
-        toast((t) => (
-            <div className="flex flex-col gap-3 text-center">
-                <p className="font-semibold">Deseja salvar {tableData.length} agrupamento(s) na base?</p>
-                <small>Registros com nomes duplicados serão ignorados.</small>
-                <div className="grid grid-cols-2 gap-2">
-                    <button
-                        onClick={async () => {
-                            toast.dismiss(t.id);
-                            const savingToast = toast.loading('Salvando na base...');
-                            try {
-                                const response = await fetch(API_URL, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                                    body: JSON.stringify(tableData),
-                                });
-                                const result = await response.json();
-                                if (result.success) {
-                                    toast.success(result.data.message, { id: savingToast });
-                                    setTableData([]);
-                                } else { 
-                                    throw new Error(result.error || "Erro desconhecido ao salvar."); 
-                                }
-                            } catch (error: any) {
-                                toast.error(`Erro ao salvar: ${error.message}`, { id: savingToast });
+    // --- FUNÇÃO DE SALVAR ATUALIZADA ---
+   // Dentro de AgrupamentosPage.tsx
+
+const handleSaveToBase = async () => {
+    if (tableData.length === 0) {
+        toast.error("Não há dados na tabela para salvar.");
+        return;
+    }
+
+    // Usando o toast de confirmação
+    toast((t) => (
+        <div className="flex flex-col gap-3 text-center">
+            <p className="font-semibold">Deseja salvar {tableData.length} agrupamento(s) na base?</p>
+            <small>Registros com nomes duplicados serão ignorados.</small>
+            <div className="grid grid-cols-2 gap-2">
+                <button
+                    onClick={async () => {
+                        toast.dismiss(t.id);
+                        const savingToast = toast.loading('Salvando na base...');
+                        try {
+                            const response = await fetch(API_URL, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                                // O corpo da requisição está correto aqui
+                                body: JSON.stringify({
+                                    api: 'agrupamentos',
+                                    payload: tableData // O array de dados vai dentro do 'payload'
+                                }),
+                            });
+                            const result = await response.json();
+                            if (result.success) {
+                                toast.success(result.data.message, { id: savingToast });
+                                setTableData([]);
+                            } else { 
+                                throw new Error(result.error || "Erro desconhecido ao salvar."); 
                             }
-                        }}
-                        className="w-full px-4 py-2 text-sm font-medium text-white bg-sky-600 rounded-md hover:bg-sky-700"
-                    >
-                        Confirmar
-                    </button>
-                    <button
-                        onClick={() => toast.dismiss(t.id)}
-                        className="w-full px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-md hover:bg-slate-200"
-                    >
-                        Cancelar
-                    </button>
-                </div>
+                        } catch (error: any) {
+                            toast.error(`Erro ao salvar: ${error.message}`, { id: savingToast });
+                        }
+                    }}
+                    className="w-full px-4 py-2 text-sm font-medium text-white bg-sky-600 rounded-md hover:bg-sky-700"
+                >
+                    Confirmar
+                </button>
+                <button
+                    onClick={() => toast.dismiss(t.id)}
+                    className="w-full px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-md hover:bg-slate-200"
+                >
+                    Cancelar
+                </button>
             </div>
-        ), { duration: 6000 }); // O toast de confirmação some após 6 segundos
-    };
-
+        </div>
+    ), { duration: 6000 });
+};
     const actionCards: (ActionCardProps & { id: string })[] = [
         { id: 'importar', icon: ImportIcon, title: 'Importar', onClick: () => setImportModalOpen(true) },
         { id: 'pesquisar', icon: SearchIcon, title: 'Pesquisar', onClick: () => setSearchModalOpen(true) },
@@ -167,11 +176,9 @@ const AgrupamentosPage: React.FC<AgrupamentosPageProps> = ({ onNavigate }) => {
 
   return (
     <>
-      {/* 2. ADICIONAR O COMPONENTE <Toaster /> AQUI */}
       <Toaster 
         position="top-right"
         toastOptions={{
-            // Estilos para modo escuro e claro
             className: 'dark:bg-slate-700 dark:text-slate-100',
             duration: 4000,
         }}
@@ -230,7 +237,7 @@ const AgrupamentosPage: React.FC<AgrupamentosPageProps> = ({ onNavigate }) => {
         )}
       </section>
 
-      {/* Os modais não precisam ser alterados */}
+      {/* Modais */}
       <ImportAgrupamentosModal 
           isOpen={isImportModalOpen}
           onClose={() => setImportModalOpen(false)}

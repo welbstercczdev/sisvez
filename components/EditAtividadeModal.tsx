@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { XIcon } from './icons/IconComponents';
+import toast from 'react-hot-toast';
+import { XIcon, SearchIcon } from './icons/IconComponents';
 import { Atividade } from '../types';
 
 interface EditAtividadeModalProps {
@@ -7,82 +8,115 @@ interface EditAtividadeModalProps {
     onClose: () => void;
     onSave: (data: Atividade) => void;
     atividade: Atividade | null;
+    apiUrl: string;
 }
 
-const DUMMY_AGRUPAMENTOS = [
-    'AG-JD-AMERICA-2023-SE34',
-    'AG-VILA-INDUSTRIAL-2023-SE41',
-    'AG-CENTRO-2023-SE01',
-    'AG-SATELITE-2023-SE35'
-];
-
-const EditAtividadeModal: React.FC<EditAtividadeModalProps> = ({ isOpen, onClose, onSave, atividade }) => {
+const EditAtividadeModal: React.FC<EditAtividadeModalProps> = ({ isOpen, onClose, onSave, atividade, apiUrl }) => {
     const [formData, setFormData] = useState<Atividade | null>(null);
+    const [agrupamentosList, setAgrupamentosList] = useState<string[]>([]);
+    const [isFetchingAgrupamentos, setIsFetchingAgrupamentos] = useState(false);
+    const [startDateFilter, setStartDateFilter] = useState('');
+    const [endDateFilter, setEndDateFilter] = useState('');
+
+    const handleFetchAgrupamentos = async () => {
+        if (!startDateFilter || !endDateFilter) {
+            toast.error('Por favor, preencha as datas de início e fim para a busca.');
+            return;
+        }
+        
+        setIsFetchingAgrupamentos(true);
+        setAgrupamentosList([]);
+        try {
+            const url = new URL(apiUrl);
+            url.searchParams.append('api', 'agrupamentos');
+            url.searchParams.append('startDate', startDateFilter);
+            url.searchParams.append('endDate', endDateFilter);
+            
+            const response = await fetch(url.toString());
+            const result = await response.json();
+
+            if (result.success && Array.isArray(result.data)) {
+                if (result.data.length === 0) {
+                    toast('Nenhum agrupamento encontrado para este período.', { icon: 'ℹ️' });
+                } else {
+                    const nomes = result.data.map((ag: { nome: string }) => ag.nome);
+                    setAgrupamentosList([...new Set(nomes)]);
+                    toast.success(`${nomes.length} agrupamento(s) encontrado(s).`);
+                }
+            } else {
+                throw new Error(result.error || 'Falha ao buscar agrupamentos.');
+            }
+        } catch (error: any) {
+            toast.error(`Erro ao buscar agrupamentos: ${error.message}`);
+        } finally {
+            setIsFetchingAgrupamentos(false);
+        }
+    };
 
     useEffect(() => {
-        // When the modal opens with new data, update the form state
-        if (atividade) {
+        if (atividade && isOpen) {
             setFormData({
                 ...atividade,
                 isAgrupamento: atividade.isAgrupamento ?? false,
                 agrupamentoNome: atividade.agrupamentoNome ?? ''
             });
-        } else {
-            // Reset form when there's no activity (e.g., modal is closed)
+            if (atividade.NOTIF_DT) {
+                const formattedDate = formatDateForInput(atividade.NOTIF_DT);
+                setStartDateFilter(formattedDate);
+                setEndDateFilter(formattedDate);
+            }
+        } else if (!isOpen) {
             setFormData(null);
+            setStartDateFilter('');
+            setEndDateFilter('');
+            setAgrupamentosList([]);
         }
-    }, [atividade]);
+    }, [atividade, isOpen]);
 
     useEffect(() => {
-        const handleEsc = (event: KeyboardEvent) => {
-           if (event.key === 'Escape') {
-              onClose();
-           }
-        };
+        const handleEsc = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
         window.addEventListener('keydown', handleEsc);
-        return () => {
-           window.removeEventListener('keydown', handleEsc);
-        };
+        return () => window.removeEventListener('keydown', handleEsc);
     }, [onClose]);
     
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        if (formData) {
-            const { name, value, type } = e.target;
-            const isCheckbox = type === 'checkbox';
-
-            const newFormData = {
-                ...formData,
-                [name]: isCheckbox ? (e.target as HTMLInputElement).checked : value,
-            };
-
-            if (name === 'isAgrupamento' && !(e.target as HTMLInputElement).checked) {
-                newFormData.agrupamentoNome = '';
-            }
-            
-            setFormData(newFormData);
+        if (!formData) return;
+        const { name, value, type } = e.target;
+        const isCheckbox = type === 'checkbox';
+        const newFormData = { ...formData, [name]: isCheckbox ? (e.target as HTMLInputElement).checked : value };
+        if (name === 'isAgrupamento' && !(e.target as HTMLInputElement).checked) {
+            newFormData.agrupamentoNome = '';
         }
+        setFormData(newFormData);
     };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (formData) {
-            onSave(formData);
-        }
+        if (formData) onSave(formData);
     };
+
+    const formatDateForInput = (dateStr: string) => {
+        if (!dateStr) return '';
+        if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) return dateStr.split('T')[0];
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+            const [day, month, year] = dateStr.split('/');
+            return `${year}-${month}-${day}`;
+        }
+        return dateStr;
+    }
 
     if (!isOpen || !formData) return null;
 
     return (
-        <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-300" role="dialog" aria-modal="true">
-            <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-3xl transform transition-all duration-300 scale-95 opacity-0 animate-scale-in">
+        <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-3xl transform animate-scale-in">
                 <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
                     <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200">Editar Atividade VEZ - ID: {formData.ID}</h2>
-                    <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
-                        <XIcon className="w-6 h-6" />
-                    </button>
+                    <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><XIcon className="w-6 h-6" /></button>
                 </div>
                 <div className="p-6 max-h-[70vh] overflow-y-auto">
                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {/* --- INÍCIO DOS CAMPOS DO FORMULÁRIO RESTAURADOS --- */}
                         <div>
                             <label htmlFor="PAC_NOME" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nome Paciente</label>
                             <input type="text" id="PAC_NOME" name="PAC_NOME" value={formData.PAC_NOME} onChange={handleChange} className="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm p-2 text-sm focus:ring-sky-500 focus:border-sky-500" />
@@ -101,11 +135,11 @@ const EditAtividadeModal: React.FC<EditAtividadeModalProps> = ({ isOpen, onClose
                         </div>
                         <div>
                             <label htmlFor="NOTIF_DT" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Data Notificação</label>
-                            <input type="date" id="NOTIF_DT" name="NOTIF_DT" value={formData.NOTIF_DT} onChange={handleChange} className="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm p-1.5 text-sm focus:ring-sky-500 focus:border-sky-500" />
+                            <input type="date" id="NOTIF_DT" name="NOTIF_DT" value={formatDateForInput(formData.NOTIF_DT)} onChange={handleChange} className="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm p-1.5 text-sm focus:ring-sky-500 focus:border-sky-500" />
                         </div>
                         <div>
                             <label htmlFor="DT_SINT" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Data Sintomas</label>
-                            <input type="date" id="DT_SINT" name="DT_SINT" value={formData.DT_SINT} onChange={handleChange} className="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm p-1.5 text-sm focus:ring-sky-500 focus:border-sky-500" />
+                            <input type="date" id="DT_SINT" name="DT_SINT" value={formatDateForInput(formData.DT_SINT)} onChange={handleChange} className="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm p-1.5 text-sm focus:ring-sky-500 focus:border-sky-500" />
                         </div>
                          <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
                            <div className="md:col-span-2">
@@ -129,37 +163,74 @@ const EditAtividadeModal: React.FC<EditAtividadeModalProps> = ({ isOpen, onClose
                             <label htmlFor="PAC_CDD" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Cidade</label>
                             <input type="text" id="PAC_CDD" name="PAC_CDD" value={formData.PAC_CDD} onChange={handleChange} className="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm p-2 text-sm focus:ring-sky-500 focus:border-sky-500" />
                         </div>
+                        {/* --- FIM DOS CAMPOS DO FORMULÁRIO RESTAURADOS --- */}
+                        
                         <div className="lg:col-span-3 pt-4 border-t border-slate-200 dark:border-slate-700">
                             <h3 className="text-base font-medium text-slate-800 dark:text-slate-200">Agrupamento</h3>
                         </div>
                         <div className="lg:col-span-3 flex items-center gap-4">
-                            <input 
-                                type="checkbox" 
-                                id="isAgrupamento" 
-                                name="isAgrupamento"
-                                checked={formData.isAgrupamento || false}
-                                onChange={handleChange}
-                                className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                            />
+                            <input type="checkbox" id="isAgrupamento" name="isAgrupamento" checked={formData.isAgrupamento || false} onChange={handleChange} className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"/>
                             <label htmlFor="isAgrupamento" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Faz parte de Agrupamento?</label>
                         </div>
+                        
                         {formData.isAgrupamento && (
-                            <div className="lg:col-span-3">
-                                <label htmlFor="agrupamentoNome" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Selecione o Agrupamento</label>
-                                <select 
-                                    id="agrupamentoNome" 
-                                    name="agrupamentoNome" 
-                                    value={formData.agrupamentoNome || ''} 
-                                    onChange={handleChange} 
-                                    className="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm p-2 text-sm focus:ring-sky-500 focus:border-sky-500"
-                                    required
-                                >
-                                    <option value="">-- Selecione --</option>
-                                    {DUMMY_AGRUPAMENTOS.map(agrup => (
-                                        <option key={agrup} value={agrup}>{agrup}</option>
-                                    ))}
-                                </select>
-                            </div>
+                            <>
+                                <div className="lg:col-span-3">
+                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Buscar Agrupamentos por Período</label>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+                                        <div>
+                                            <label htmlFor="startDateFilter" className="text-xs text-slate-500">Início</label>
+                                            <input
+                                                type="date"
+                                                id="startDateFilter"
+                                                value={startDateFilter}
+                                                onChange={(e) => setStartDateFilter(e.target.value)}
+                                                className="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm p-1.5 text-sm"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label htmlFor="endDateFilter" className="text-xs text-slate-500">Fim</label>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="date"
+                                                    id="endDateFilter"
+                                                    value={endDateFilter}
+                                                    onChange={(e) => setEndDateFilter(e.target.value)}
+                                                    className="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm p-1.5 text-sm"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={handleFetchAgrupamentos}
+                                                    disabled={isFetchingAgrupamentos}
+                                                    className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-sky-600 border border-transparent rounded-md shadow-sm hover:bg-sky-700 disabled:opacity-50"
+                                                >
+                                                    <SearchIcon className="w-4 h-4"/>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div className="lg:col-span-3">
+                                    <label htmlFor="agrupamentoNome" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Selecione o Agrupamento</label>
+                                    <select 
+                                        id="agrupamentoNome" 
+                                        name="agrupamentoNome" 
+                                        value={formData.agrupamentoNome || ''} 
+                                        onChange={handleChange} 
+                                        className="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm p-2 text-sm focus:ring-sky-500 focus:border-sky-500 disabled:bg-slate-100 dark:disabled:bg-slate-600"
+                                        required
+                                        disabled={agrupamentosList.length === 0 && !isFetchingAgrupamentos}
+                                    >
+                                        <option value="">
+                                            {isFetchingAgrupamentos ? 'Buscando...' : (agrupamentosList.length === 0 ? 'Busque por um período acima' : '-- Selecione --')}
+                                        </option>
+                                        {agrupamentosList.map(agrup => (
+                                            <option key={agrup} value={agrup}>{agrup}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </>
                         )}
                    </div>
                 </div>
@@ -167,26 +238,19 @@ const EditAtividadeModal: React.FC<EditAtividadeModalProps> = ({ isOpen, onClose
                     <button 
                         type="button"
                         onClick={onClose}
-                        className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 dark:focus:ring-offset-slate-800"
+                        className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600"
                     >
                         Cancelar
                     </button>
                      <button
                         type="submit"
-                        className="px-4 py-2 text-sm font-medium text-white bg-sky-600 border border-transparent rounded-md shadow-sm hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 dark:focus:ring-offset-slate-800"
+                        className="px-4 py-2 text-sm font-medium text-white bg-sky-600 border border-transparent rounded-md shadow-sm hover:bg-sky-700"
                     >
                         Salvar Alterações
                     </button>
                 </div>
             </form>
-            {/* Simple animation for modal entrance */}
-            <style>{`
-                @keyframes scale-in {
-                    from { transform: scale(0.95); opacity: 0; }
-                    to { transform: scale(1); opacity: 1; }
-                }
-                .animate-scale-in { animation: scale-in 0.2s ease-out forwards; }
-            `}</style>
+            <style>{`.animate-scale-in { animation: scale-in 0.2s ease-out forwards; } @keyframes scale-in { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }`}</style>
         </div>
     );
 };
