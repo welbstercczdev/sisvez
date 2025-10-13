@@ -118,7 +118,8 @@ const QuadrasMapModal: React.FC<QuadrasMapModalProps> = ({ isOpen, onClose, init
 
     const areaColorMap = useMemo(() => {
         const map = new Map<string, string>();
-        Array.from(loadedAreas.keys()).forEach((areaId, index) => {
+        // CORREÇÃO AQUI: Adicionado (areaId: string)
+        Array.from(loadedAreas.keys()).forEach((areaId: string, index) => {
             map.set(areaId, areaColors[index % areaColors.length]);
         });
         return map;
@@ -521,12 +522,12 @@ const QuadrasMapModal: React.FC<QuadrasMapModalProps> = ({ isOpen, onClose, init
                 const defaultAreaStyle = { ...defaultStyle, color: areaColor };
                 
                 const layer = L.geoJSON(geoJsonData, {
-                    style: (feature) => {
+                    style: (feature: any) => {
                         const blockId = getFeatureBlockId(feature);
                         const uniqueId = `${areaId}-${blockId}`;
                         return selectedQuadras.has(uniqueId) ? selectedStyle : defaultAreaStyle;
                     },
-                    onEachFeature: (feature, layer) => {
+                    onEachFeature: (feature: any, layer: any) => {
                         const blockId = getFeatureBlockId(feature);
                         if (!blockId) return;
 
@@ -561,12 +562,12 @@ const QuadrasMapModal: React.FC<QuadrasMapModalProps> = ({ isOpen, onClose, init
         });
 
         // Fit bounds
-        const allBounds = Array.from(layerRefs.current.values()).map(l => l.getBounds()).filter(b => b.isValid());
+        const allBounds = Array.from(layerRefs.current.values()).map((l: any) => l.getBounds()).filter(b => b.isValid());
         if (allBounds.length > 0) {
             const group = new L.featureGroup(allBounds.map(b => L.rectangle(b)));
             if (group.getBounds().isValid()) map.fitBounds(group.getBounds().pad(0.1));
         }
-    }, [isOpen, loadedAreas, readOnly, areaColorMap]); // Added readOnly dependency
+    }, [isOpen, loadedAreas, readOnly, areaColorMap]);
     
     useEffect(() => {
         if (mapInstanceRef.current) setTimeout(() => mapInstanceRef.current.invalidateSize(), 310);
@@ -590,7 +591,7 @@ const QuadrasMapModal: React.FC<QuadrasMapModalProps> = ({ isOpen, onClose, init
     }, [selectedQuadras, isOpen, areaColorMap]);
 
     const handleSaveSelection = () => {
-        const sortedQuadras = Array.from(selectedQuadras).sort((a, b) => {
+        const sortedQuadras = Array.from(selectedQuadras).sort((a: string, b: string) => {
             const [areaA, blockA] = a.split('-').map(Number);
             const [areaB, blockB] = b.split('-').map(Number);
             if (areaA !== areaB) return areaA - areaB;
@@ -678,7 +679,7 @@ const QuadrasMapModal: React.FC<QuadrasMapModalProps> = ({ isOpen, onClose, init
                         <div>
                              <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Áreas Carregadas:</p>
                              <div className="flex flex-wrap gap-1.5">
-                                {loadedAreas.size > 0 ? Array.from(loadedAreas.keys()).map((id) => {
+                                {loadedAreas.size > 0 ? Array.from(loadedAreas.keys()).map((id: string) => {
                                     const color = areaColorMap.get(id);
                                     return (
                                         <span key={id} className="flex items-center gap-1.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-medium pl-2 pr-1 py-1 rounded-full">
@@ -695,12 +696,12 @@ const QuadrasMapModal: React.FC<QuadrasMapModalProps> = ({ isOpen, onClose, init
                                 <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Quadras Selecionadas ({selectedQuadras.size}):</p>
                                 <div className="h-14 overflow-y-auto rounded-md bg-slate-100 dark:bg-slate-900/50 p-1.5 border border-slate-200 dark:border-slate-700">
                                     <div className="flex flex-wrap gap-1.5">
-                                        {selectedQuadras.size > 0 ? Array.from(selectedQuadras).sort((a,b)=>{
+                                        {selectedQuadras.size > 0 ? Array.from(selectedQuadras).sort((a: string, b: string)=>{
                                             const [areaA, blockA] = a.split('-').map(Number);
                                             const [areaB, blockB] = b.split('-').map(Number);
                                             if (areaA !== areaB) return areaA - areaB;
                                             return blockA - blockB;
-                                        }).map(uniqueId => {
+                                        }).map((uniqueId: string) => {
                                             const [area, block] = uniqueId.split('-');
                                             return (
                                                 <span key={uniqueId} className="flex items-center gap-1.5 bg-sky-100 dark:bg-sky-800 text-sky-800 dark:text-sky-200 text-xs font-medium pl-2 pr-1 py-1 rounded-full">
