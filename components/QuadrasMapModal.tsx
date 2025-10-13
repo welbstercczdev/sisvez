@@ -386,9 +386,13 @@ const QuadrasMapModal: React.FC<QuadrasMapModalProps> = ({ isOpen, onClose, init
         if (isOpen) {
             const initialIds = initialSelectedQuadras.split(',').map(s => s.trim()).filter(Boolean);
             setSelectedQuadras(new Set(initialIds));
+            
+            // A linha abaixo foi comentada para não carregar a área inicial automaticamente
+            /*
             if (initialAreaId) {
                 handleAddAreas([initialAreaId]);
             }
+            */
         } else {
             // Reset state on close
             if (mapInstanceRef.current) {
