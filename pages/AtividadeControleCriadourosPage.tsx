@@ -1,14 +1,21 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { HomeIcon, CalendarIcon, MapPinIcon, ChevronDownIcon, ClusterIcon, MapIcon } from '../components/icons/IconComponents';
+import React, { useState, useEffect } from 'react';
+// 1. IMPORTAR A BIBLIOTECA DE TOAST
+import toast, { Toaster } from 'react-hot-toast';
+import { HomeIcon, MapPinIcon, ClusterIcon } from '../components/icons/IconComponents';
 import { Atividade, Equipe } from '../types';
 import QuadraSelectionList from '../components/QuadraSelectionList';
 
+// URL do seu Web App publicado no Google Apps Script
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyotEdB0INfTNUK9q6MKbHEMQFUzwi5rMYnfZ6tQ7OaQ4ojOa9J3ItXqNsjjEl4XqN0/exec'; 
+
+// Interface das props do componente
 interface AtividadeControleCriadourosPageProps {
     onNavigate: (page: string) => void;
     notification: Atividade | null;
     equipes: Equipe[];
 }
 
+// Componente auxiliar para campos de formulário
 const FormField: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div>
         <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{label}</label>
@@ -16,24 +23,36 @@ const FormField: React.FC<{ label: string; children: React.ReactNode }> = ({ lab
     </div>
 );
 
+// Função utilitária para converter data DD/MM/YYYY para YYYY-MM-DD
+const formatDateForInput = (dateStr: string): string => {
+    if (!dateStr || !/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+        return '';
+    }
+    const [day, month, year] = dateStr.split('/');
+    return `${year}-${month}-${day}`;
+};
+
 const AtividadeControleCriadourosPage: React.FC<AtividadeControleCriadourosPageProps> = ({ onNavigate, notification, equipes }) => {
+    
+    const [isLoading, setIsLoading] = useState(false);
     const [formData, setFormData] = useState({
-        totalQuadras: 0,
         dataCC: '',
         equipeCC: '',
         relacaoQuadras: '',
+        totalQuadras: 0,
     });
 
     useEffect(() => {
         if (notification) {
             const quadras = notification.relacaoQuadrasControleCriadouros || '';
             const quadrasCount = quadras ? quadras.split(',').filter(Boolean).length : 0;
-            setFormData(prev => ({
-                ...prev,
-                dataCC: notification.NOTIF_DT, // Idealmente, converter de DD/MM/AAAA para AAAA-MM-DD se necessário
+            
+            setFormData({
+                dataCC: formatDateForInput(notification.NOTIF_DT),
+                equipeCC: '',
                 relacaoQuadras: quadras,
                 totalQuadras: quadrasCount
-            }));
+            });
         }
     }, [notification]);
 
@@ -51,6 +70,75 @@ const AtividadeControleCriadourosPage: React.FC<AtividadeControleCriadourosPageP
     
     const handleQuadrasChange = (newValue: string) => {
         setFormData(prev => ({ ...prev, relacaoQuadras: newValue }));
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (!notification) {
+            // Substituído alert por toast.error
+            toast.error("Erro: Nenhuma notificação está carregada.");
+            return;
+        }
+
+        if (!formData.dataCC || !formData.equipeCC) {
+            // Substituído alert por toast.error
+            toast.error("Por favor, preencha a Data e selecione uma Equipe.");
+            return;
+        }
+
+        setIsLoading(true);
+        // Usamos um toast de loading que será atualizado para sucesso ou erro
+        const loadingToastId = toast.loading('Salvando programação...');
+
+        const fullAddress = `${notification.PAC_LOGR}, ${notification.PAC_NUM} - ${notification.PAC_BAIR}, ${notification.PAC_CDD}`;
+
+        const payload = {
+            dataCC: formData.dataCC,
+            equipeCC: formData.equipeCC,
+            totalQuadras: formData.totalQuadras,
+            relacaoQuadras: formData.relacaoQuadras,
+            notificationId: notification.ID,
+            notificationYear: notification.ANO,
+            agravo: notification.AGRAVO,
+            fullAddress: fullAddress,
+            agrupamentoNome: notification.agrupamentoNome || "",
+            area: notification.PAC_REG,
+            bairro: notification.PAC_BAIR,
+        };
+
+        const requestBody = {
+            api: 'controleCriadouros',
+            payload: payload
+        };
+
+        try {
+            const response = await fetch(GOOGLE_SCRIPT_URL, {
+                method: 'POST',
+                redirect: "follow",
+                body: JSON.stringify(requestBody),
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                // Substituído alert por toast.success
+                toast.success(result.message, { id: loadingToastId });
+                // Adiciona um pequeno delay antes de navegar para o usuário ver a mensagem
+                setTimeout(() => {
+                    onNavigate('demandas');
+                }, 1500);
+            } else {
+                throw new Error(result.error);
+            }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            // Substituído alert por toast.error
+            toast.error(`Falha ao salvar: ${errorMessage}`, { id: loadingToastId });
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const breadcrumbs = (
@@ -84,7 +172,7 @@ const AtividadeControleCriadourosPage: React.FC<AtividadeControleCriadourosPageP
                 <div>{breadcrumbs}</div>
                 <div className="bg-white dark:bg-slate-800/50 p-6 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700/50 text-center">
                     <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-4">Nenhuma Notificação Selecionada</h2>
-                    <p className="text-slate-600 dark:text-slate-400 mb-6">Por favor, retorne à página de Demandas para selecionar uma notificação antes de criar a atividade.</p>
+                    <p className="text-slate-600 dark:text-slate-400 mb-6">Por favor, retorne à página de Demandas para selecionar uma notificação.</p>
                     <button onClick={() => onNavigate('demandas')} className="bg-sky-600 hover:bg-sky-700 text-white font-medium py-2 px-6 rounded-md text-sm">
                         Voltar para Demandas
                     </button>
@@ -97,17 +185,18 @@ const AtividadeControleCriadourosPage: React.FC<AtividadeControleCriadourosPageP
 
     return (
         <>
+            {/* 2. ADICIONAR O COMPONENTE <Toaster /> PARA RENDERIZAR AS NOTIFICAÇÕES */}
+            {/* Ele pode ficar em qualquer lugar, mas aqui no topo é uma boa prática. */}
+            <Toaster position="top-right" reverseOrder={false} />
+
             <section className="space-y-6 pb-8">
                 <div>{breadcrumbs}</div>
                 
                 <div className="bg-white dark:bg-slate-800/50 p-6 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700/50">
-                    <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); alert('Programação salva!'); }}>
+                    <form className="space-y-5" onSubmit={handleSubmit}>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                             <FormField label="Número da notificação">
-                                {/* ====================== MODIFICAÇÃO APLICADA AQUI ====================== */}
-                                {/* O valor agora combina o ID e os dois últimos dígitos do ANO. */}
                                 <input type="text" value={`${notification.ID}/${String(notification.ANO).slice(-2)}`} disabled className="w-full bg-slate-100 dark:bg-slate-700/50 border-slate-300 dark:border-slate-600 rounded-md p-2 text-sm" />
-                                {/* ======================================================================= */}
                             </FormField>
                             <FormField label="Agravo"><input type="text" value={notification.AGRAVO} disabled className="w-full bg-slate-100 dark:bg-slate-700/50 border-slate-300 dark:border-slate-600 rounded-md p-2 text-sm" /></FormField>
                             <FormField label="Data CC">
@@ -117,6 +206,7 @@ const AtividadeControleCriadourosPage: React.FC<AtividadeControleCriadourosPageP
                                     name="dataCC"
                                     value={formData.dataCC}
                                     onChange={handleInputChange}
+                                    required
                                     className="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm p-1.5 text-sm focus:ring-sky-500 focus:border-sky-500"
                                 />
                             </FormField>
@@ -126,6 +216,7 @@ const AtividadeControleCriadourosPage: React.FC<AtividadeControleCriadourosPageP
                                     name="equipeCC"
                                     value={formData.equipeCC}
                                     onChange={handleInputChange}
+                                    required
                                     className="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm p-2 text-sm focus:ring-sky-500 focus:border-sky-500"
                                 >
                                     <option value="">-- Selecione uma equipe --</option>
@@ -175,9 +266,10 @@ const AtividadeControleCriadourosPage: React.FC<AtividadeControleCriadourosPageP
                         <div className="mt-6 flex justify-end">
                             <button
                                 type="submit"
-                                className="bg-sky-600 hover:bg-sky-700 text-white font-medium py-2 px-6 rounded-md text-sm transition-colors duration-200"
+                                disabled={isLoading}
+                                className="bg-sky-600 hover:bg-sky-700 text-white font-medium py-2 px-6 rounded-md text-sm transition-colors duration-200 disabled:bg-sky-400 disabled:cursor-not-allowed"
                             >
-                                Salvar Programação de CC
+                                {isLoading ? 'Salvando...' : 'Salvar Programação de CC'}
                             </button>
                         </div>
                     </form>
