@@ -1,3 +1,8 @@
+// ====================== CORREÇÃO APLICADA AQUI ======================
+// Adiciona a importação do React para que o tipo 'React.ComponentType' seja reconhecido.
+import React from 'react';
+// =======================================================================
+
 export interface NavItem {
   id: string;
   title: string;
@@ -34,12 +39,7 @@ export interface Atividade {
     CLASSIF: string; // Internal classification, not from CSV
     isAgrupamento?: boolean;
     agrupamentoNome?: string;
-
-    // ====================== MODIFICAÇÃO APLICADA AQUI ======================
-    // O status agora reflete exatamente o que o backend envia ('Pendente' ou 'Demandado')
     statusControleCriadouros?: 'Pendente' | 'Demandado';
-    // =======================================================================
-    
     dataControleCriadouros?: string;
     equipeControleCriadouros?: string;
     relacaoQuadrasControleCriadouros?: string;
