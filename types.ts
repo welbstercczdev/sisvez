@@ -34,7 +34,12 @@ export interface Atividade {
     CLASSIF: string; // Internal classification, not from CSV
     isAgrupamento?: boolean;
     agrupamentoNome?: string;
-    statusControleCriadouros?: 'Pendente' | 'Em Andamento' | 'Concluído';
+
+    // ====================== MODIFICAÇÃO APLICADA AQUI ======================
+    // O status agora reflete exatamente o que o backend envia ('Pendente' ou 'Demandado')
+    statusControleCriadouros?: 'Pendente' | 'Demandado';
+    // =======================================================================
+    
     dataControleCriadouros?: string;
     equipeControleCriadouros?: string;
     relacaoQuadrasControleCriadouros?: string;
