@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+// Adicionado: importações para o sistema de toast
+import { Toaster, toast } from 'react-hot-toast';
 import { XIcon, FullscreenIcon, FilterIcon, PlusIcon, LayersIcon, CircleIcon, XCircleIcon, GeoAltIcon, ShareIcon, ImportIcon, SearchIcon, PrinterIcon } from './icons/IconComponents';
 import QuadraDetailModal from './QuadraDetailModal';
 import AddAreaModal from './AddAreaModal';
@@ -162,7 +164,7 @@ const QuadrasMapModal: React.FC<QuadrasMapModalProps> = ({ isOpen, onClose, init
     const handleFindMe = useCallback(() => {
         const map = mapInstanceRef.current;
         if (!map || !navigator.geolocation) {
-            alert('A geolocalização não é suportada pelo seu navegador.');
+            toast.error('A geolocalização não é suportada pelo seu navegador.');
             return;
         }
 
@@ -186,14 +188,14 @@ const QuadrasMapModal: React.FC<QuadrasMapModalProps> = ({ isOpen, onClose, init
                 if (found) {
                     const { feature, uniqueId } = found;
                     const [areaId, blockId] = uniqueId.split('-');
-                    alert(`Você está na quadra ${blockId} da área ${areaId}.`);
+                    toast.success(`Você está na quadra ${blockId} da área ${areaId}.`);
 
                     highlightLayerRef.current = L.geoJSON(feature, {
                         style: { ...selectedStyle, color: '#00ffff', fillColor: '#00ffff', weight: 4 }
                     }).addTo(map);
 
                 } else {
-                    alert('Sua localização atual não está dentro de nenhuma quadra carregada no mapa.');
+                    toast('Sua localização atual não está dentro de nenhuma quadra carregada no mapa.');
                 }
 
                 setIsLocating(false);
@@ -205,7 +207,7 @@ const QuadrasMapModal: React.FC<QuadrasMapModalProps> = ({ isOpen, onClose, init
                     case error.POSITION_UNAVAILABLE: message = 'Informação de localização indisponível.'; break;
                     case error.TIMEOUT: message = 'O pedido para obter a localização do usuário expirou.'; break;
                 }
-                alert(message);
+                toast.error(message);
                 setIsLocating(false);
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
@@ -220,7 +222,7 @@ const QuadrasMapModal: React.FC<QuadrasMapModalProps> = ({ isOpen, onClose, init
 
         try {
             if (isNaN(lat) || isNaN(lon)) {
-                alert('As coordenadas recebidas para o endereço são inválidas.');
+                toast.error('As coordenadas recebidas para o endereço são inválidas.');
                 return;
             }
             
@@ -243,7 +245,7 @@ const QuadrasMapModal: React.FC<QuadrasMapModalProps> = ({ isOpen, onClose, init
             setIsSearchAddressModalOpen(false);
         } catch (error) {
             console.error('Error processing address:', error);
-            alert(`Ocorreu um erro ao processar o endereço: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+            toast.error(`Ocorreu um erro ao processar o endereço: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
         }
     }, [findQuadraForLocation]);
 
@@ -278,6 +280,7 @@ const QuadrasMapModal: React.FC<QuadrasMapModalProps> = ({ isOpen, onClose, init
         } catch (err) {
             console.error(`Fetch error for area ${areaId}:`, err);
             setLoadingStatus(prev => new Map(prev).set(areaId, 'error'));
+            toast.error(`Falha ao carregar dados da área ${areaId}.`);
         }
     }, []);
 
@@ -377,8 +380,9 @@ const QuadrasMapModal: React.FC<QuadrasMapModalProps> = ({ isOpen, onClose, init
             }
     
             setIsImportModalOpen(false);
+            toast.success('Estado do mapa carregado com sucesso!');
         } catch (e) {
-            alert('Falha ao carregar o estado: Dados inválidos ou corrompidos.');
+            toast.error('Falha ao carregar o estado: Dados inválidos ou corrompidos.');
             console.error("Failed to load map state:", e);
         }
     };
@@ -609,6 +613,9 @@ const QuadrasMapModal: React.FC<QuadrasMapModalProps> = ({ isOpen, onClose, init
 
     return (
         <>
+            {/* Adicionado: Componente para renderizar os toasts */}
+            <Toaster position="top-center" reverseOrder={false} />
+
             <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" role="dialog" aria-modal="true">
                 <div className={`bg-white dark:bg-slate-800 shadow-2xl flex flex-col transform transition-all duration-300 scale-95 opacity-0 animate-scale-in ${isFullScreen ? 'w-full h-full max-w-full max-h-full rounded-none' : 'w-full max-w-4xl h-[85vh] rounded-xl'}`}>
                     <div className={`flex-shrink-0 border-b border-slate-200 dark:border-slate-700 transition-all duration-300 ease-in-out ${isCompactView ? 'max-h-0 p-0 border-b-0 overflow-hidden opacity-0' : 'max-h-20 p-2 sm:p-3'}`}>
