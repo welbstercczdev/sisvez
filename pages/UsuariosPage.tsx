@@ -5,41 +5,35 @@ import { User, Role } from '../types';
 import InserirUsuarioModal from '../components/InserirUsuarioModal';
 import EditarUsuarioModal from '../components/EditarUsuarioModal';
 
-// URL do seu Web App publicado no Google Apps Script
-// SUBSTITUA PELA SUA URL REAL
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyotEdB0INfTNUK9q6MKbHEMQFUzwi5rMYnfZ6tQ7OaQ4ojOa9J3ItXqNsjjEl4XqN0/exec';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyotEdB0INfTNUK9q6MKbHEMQFUzwi5rMYnfZ6tQ7OaQ4ojOa9J3ItXqNsjjEl4XqN0/exec'; // SUBSTITUA PELA SUA URL REAL
 
-// Helper para dar cores aos badges de função
+// ====================== MODIFICAÇÕES APLICADAS AQUI ======================
 const getRoleBadgeColor = (role: Role) => {
     switch(role) {
         case 'Admin': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
         case 'Supervisor': return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300';
-        case 'Agente de Campo': return 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-300';
+        case 'Líder': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'; // <-- COR PARA LÍDER
+        case 'ACE': return 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-300'; // <-- COR PARA ACE
         case 'Analista': return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300';
         case 'Convidado': return 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300';
         default: return 'bg-gray-100 text-gray-800';
     }
 }
+// =======================================================================
 
 interface UsuariosPageProps {
     onNavigate: (page: string) => void;
 }
 
 const UsuariosPage: React.FC<UsuariosPageProps> = ({ onNavigate }) => {
-    // Estados para os dados da API
     const [usuarios, setUsuarios] = useState<User[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    
-    // Estado para o termo de busca
     const [searchTerm, setSearchTerm] = useState('');
-
-    // Estados para controle dos modais
     const [isInserirModalOpen, setIsInserirModalOpen] = useState(false);
     const [isEditarModalOpen, setIsEditarModalOpen] = useState(false);
     const [usuarioParaEditar, setUsuarioParaEditar] = useState<User | null>(null);
 
-    // Função para buscar os dados do backend
     const fetchData = async () => {
         setIsLoading(true);
         setError(null);
@@ -60,12 +54,10 @@ const UsuariosPage: React.FC<UsuariosPageProps> = ({ onNavigate }) => {
         }
     };
 
-    // Busca os dados iniciais quando o componente é montado
     useEffect(() => {
         fetchData();
     }, []);
 
-    // Função genérica para enviar dados via POST
     const postData = async (action: string, payload: any) => {
         const loadingToastId = toast.loading('Processando sua solicitação...');
         try {
@@ -86,7 +78,6 @@ const UsuariosPage: React.FC<UsuariosPageProps> = ({ onNavigate }) => {
         }
     };
 
-    // Funções de manipulação de dados (Salvar, Atualizar, Deletar)
     const handleSaveUsuario = async (data: { id: string, name: string }) => {
         const success = await postData('create', data);
         if (success) {
@@ -111,7 +102,7 @@ const UsuariosPage: React.FC<UsuariosPageProps> = ({ onNavigate }) => {
                     <button
                         onClick={async () => {
                             toast.dismiss(t.id);
-                            const success = await postData('delete', { uuid: user.uuid }); // Exclusão pelo UUID
+                            const success = await postData('delete', { uuid: user.uuid });
                             if (success) fetchData();
                         }}
                         className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-sm"
@@ -129,13 +120,11 @@ const UsuariosPage: React.FC<UsuariosPageProps> = ({ onNavigate }) => {
         ), { duration: 6000, position: "top-center" });
     };
 
-    // Funções para abrir os modais
     const handleOpenEditModal = (user: User) => {
         setUsuarioParaEditar(user);
         setIsEditarModalOpen(true);
     };
 
-    // Lógica de filtragem com useMemo para performance
     const filteredUsuarios = useMemo(() => {
         const lowercasedFilter = searchTerm.toLowerCase();
         if (!lowercasedFilter) {
@@ -151,7 +140,6 @@ const UsuariosPage: React.FC<UsuariosPageProps> = ({ onNavigate }) => {
         <>
             <Toaster position="top-right" />
             <section className="space-y-6 pb-8">
-                {/* Breadcrumbs */}
                 <div>
                      <nav className="flex" aria-label="Breadcrumb">
                         <ol className="inline-flex items-center space-x-1 md:space-x-2 rtl:space-x-reverse text-sm">
@@ -176,11 +164,10 @@ const UsuariosPage: React.FC<UsuariosPageProps> = ({ onNavigate }) => {
                     </nav>
                 </div>
 
-                {/* Header da Página com o campo de busca */}
                 <div className="bg-white dark:bg-slate-800/50 p-4 sm:p-6 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
                         <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Gerenciar Usuários e Permissões</h2>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Adicione, edite ou remova usuários do sistema.</p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Adicione usuários e atribua suas permissões (roles) no sistema.</p>
                     </div>
                     <div className="flex items-center gap-2 w-full sm:w-auto">
                         <div className="relative flex-grow">
@@ -200,7 +187,6 @@ const UsuariosPage: React.FC<UsuariosPageProps> = ({ onNavigate }) => {
                     </div>
                 </div>
                 
-                {/* Tabela de Usuários */}
                 <div className="bg-white dark:bg-slate-800/50 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700/50 overflow-x-auto">
                     <table className="w-full text-sm text-left text-slate-500 dark:text-slate-400">
                         <thead className="text-xs text-slate-700 uppercase bg-slate-100 dark:bg-slate-700 dark:text-slate-300">
@@ -233,12 +219,8 @@ const UsuariosPage: React.FC<UsuariosPageProps> = ({ onNavigate }) => {
                                         </div>
                                     </td>
                                     <td className="py-4 px-6 text-right space-x-2 whitespace-nowrap">
-                                        <button onClick={() => handleOpenEditModal(user)} className="p-2 text-slate-500 hover:text-sky-600 dark:hover:text-sky-400 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-                                            <PencilIcon className="w-4 h-4" />
-                                        </button>
-                                        <button onClick={() => handleDeleteUsuario(user)} className="p-2 text-slate-500 hover:text-red-600 dark:hover:text-red-400 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-                                            <TrashIcon className="w-4 h-4" />
-                                        </button>
+                                        <button onClick={() => handleOpenEditModal(user)} className="p-2 text-slate-500 hover:text-sky-600 dark:hover:text-sky-400 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"><PencilIcon className="w-4 h-4" /></button>
+                                        <button onClick={() => handleDeleteUsuario(user)} className="p-2 text-slate-500 hover:text-red-600 dark:hover:text-red-400 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"><TrashIcon className="w-4 h-4" /></button>
                                     </td>
                                 </tr>
                             )) : (
@@ -254,18 +236,8 @@ const UsuariosPage: React.FC<UsuariosPageProps> = ({ onNavigate }) => {
                 </div>
             </section>
 
-            {/* Modais */}
-            <InserirUsuarioModal 
-                isOpen={isInserirModalOpen}
-                onClose={() => setIsInserirModalOpen(false)}
-                onSave={handleSaveUsuario}
-            />
-            <EditarUsuarioModal 
-                isOpen={isEditarModalOpen}
-                onClose={() => setIsEditarModalOpen(false)}
-                onSave={handleUpdateUsuario}
-                user={usuarioParaEditar}
-            />
+            <InserirUsuarioModal isOpen={isInserirModalOpen} onClose={() => setIsInserirModalOpen(false)} onSave={handleSaveUsuario} />
+            <EditarUsuarioModal isOpen={isEditarModalOpen} onClose={() => setIsEditarModalOpen(false)} onSave={handleUpdateUsuario} user={usuarioParaEditar} />
         </>
     );
 };
