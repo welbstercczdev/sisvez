@@ -6,48 +6,48 @@ import MultiSelect from './MultiSelect';
 interface InserirEquipeModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (data: Equipe) => void;
+    // O onSave agora espera um Omit para alinhar com o que a EquipesPage envia
+    onSave: (data: Omit<Equipe, 'id' | 'historico'>) => void; 
+    usuarios: User[]; // Recebe a lista de usuários como prop
 }
 
-const DUMMY_USERS: User[] = [
-    { id: 1, name: 'Ana Silva' },
-    { id: 2, name: 'Bruno Costa' },
-    { id: 3, name: 'Carla Dias' },
-    { id: 4, name: 'Daniel Farias' },
-    { id: 5, name: 'Elisa Gomes' },
-    { id: 6, name: 'Fábio Lima' },
-    { id: 7, name: 'Mariana Oliveira' },
-    { id: 8, name: 'Pedro Martins' }
-];
-
-const InserirEquipeModal: React.FC<InserirEquipeModalProps> = ({ isOpen, onClose, onSave }) => {
+const InserirEquipeModal: React.FC<InserirEquipeModalProps> = ({ isOpen, onClose, onSave, usuarios }) => {
+    // Estados internos para controlar o formulário
     const [nome, setNome] = useState('');
-    const [lider, setLider] = useState<User | null>(null);
+    const [liderUuid, setLiderUuid] = useState<string>('');
     const [membros, setMembros] = useState<User[]>([]);
     const [status, setStatus] = useState<'Ativo' | 'Inativo'>('Ativo');
     const [error, setError] = useState<string | null>(null);
 
-
+    // Efeito para fechar o modal com a tecla 'Escape'
     useEffect(() => {
         const handleEsc = (event: KeyboardEvent) => {
            if (event.key === 'Escape') {
               handleClose();
            }
         };
-        window.addEventListener('keydown', handleEsc);
+        if (isOpen) {
+            window.addEventListener('keydown', handleEsc);
+        }
         return () => {
            window.removeEventListener('keydown', handleEsc);
         };
-    }, [onClose]);
+    }, [isOpen]);
 
+    // Função para lidar com a submissão do formulário
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        setError(null); // Limpa erros anteriores
+
+        // Validações
         if (!nome.trim()) {
             setError('O nome da equipe é obrigatório.');
             return;
         }
-        if (!lider) {
-            setError('Selecione um líder.');
+        
+        const liderSelecionado = usuarios.find(u => u.uuid === liderUuid);
+        if (!liderSelecionado) {
+            setError('Selecione um líder para a equipe.');
             return;
         }
         if (membros.length === 0) {
@@ -55,20 +55,22 @@ const InserirEquipeModal: React.FC<InserirEquipeModalProps> = ({ isOpen, onClose
             return;
         }
 
-        const novaEquipe: Equipe = {
-            id: `EQ-${Date.now()}`,
-            nome,
-            lider,
+        // Monta o objeto da nova equipe com os dados completos
+        const novaEquipe = {
+            nome: nome.trim(),
+            lider: liderSelecionado,
             membros,
             status,
         };
+        
         onSave(novaEquipe);
         handleClose();
     };
     
+    // Função para limpar o estado e fechar o modal
     const handleClose = () => {
         setNome('');
-        setLider(null);
+        setLiderUuid('');
         setMembros([]);
         setStatus('Ativo');
         setError(null);
@@ -95,15 +97,18 @@ const InserirEquipeModal: React.FC<InserirEquipeModalProps> = ({ isOpen, onClose
                         </div>
                         <div className="md:col-span-2">
                             <label htmlFor="lider" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Líder</label>
-                            <select id="lider" value={lider?.id || ''} onChange={(e) => setLider(DUMMY_USERS.find(u => u.id === parseInt(e.target.value)) || null)} className="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm p-2 text-sm focus:ring-sky-500 focus:border-sky-500">
+                            <select id="lider" value={liderUuid} onChange={(e) => setLiderUuid(e.target.value)} className="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm p-2 text-sm focus:ring-sky-500 focus:border-sky-500">
                                 <option value="">-- Selecione um Líder --</option>
-                                {DUMMY_USERS.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
+                                {/* Popula o select com os usuários da API, mostrando nome e matrícula */}
+                                {usuarios.map(user => (
+                                    <option key={user.uuid} value={user.uuid}>{user.name} ({user.id})</option>
+                                ))}
                             </select>
                         </div>
                         <div className="md:col-span-2">
                              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Membros</label>
                              <MultiSelect
-                                options={DUMMY_USERS}
+                                options={usuarios} // Passa a lista de usuários da API para o MultiSelect
                                 selectedValues={membros}
                                 onChange={setMembros}
                                 placeholder="Selecione os membros..."
@@ -142,7 +147,6 @@ const InserirEquipeModal: React.FC<InserirEquipeModalProps> = ({ isOpen, onClose
                     </button>
                 </div>
             </form>
-            {/* Simple animation for modal entrance */}
             <style>{`
                 @keyframes scale-in {
                     from { transform: scale(0.95); opacity: 0; }

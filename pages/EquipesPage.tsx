@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
 import { 
     HomeIcon, 
@@ -20,15 +20,13 @@ const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyotEdB0INfTN
 interface EquipesPageProps {
     onNavigate: (page: string) => void;
     historicoOrganizacoes: OrganizacaoSalva[];
+    // Novos props para receber dados do App.tsx
+    equipes: Equipe[];
+    usuarios: User[];
+    onDataUpdate: () => void; // Função para recarregar os dados
 }
 
-const EquipesPage: React.FC<EquipesPageProps> = ({ onNavigate, historicoOrganizacoes }) => {
-    // Estados para os dados da API
-    const [equipes, setEquipes] = useState<Equipe[]>([]);
-    const [usuarios, setUsuarios] = useState<User[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
+const EquipesPage: React.FC<EquipesPageProps> = ({ onNavigate, historicoOrganizacoes, equipes, usuarios, onDataUpdate }) => {
     // Estados para controle dos modais e UI
     const [isInserirModalOpen, setIsInserirModalOpen] = useState(false);
     const [isEditarModalOpen, setIsEditarModalOpen] = useState(false);
@@ -38,44 +36,6 @@ const EquipesPage: React.FC<EquipesPageProps> = ({ onNavigate, historicoOrganiza
     const [equipeComHistorico, setEquipeComHistorico] = useState<Equipe | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
 
-    // Função para buscar dados do backend
-    const fetchData = async () => {
-        setIsLoading(true);
-        setError(null);
-        try {
-            const [equipesResponse, usuariosResponse] = await Promise.all([
-                fetch(`${GOOGLE_SCRIPT_URL}?api=equipes`),
-                fetch(`${GOOGLE_SCRIPT_URL}?api=usuarios`)
-            ]);
-
-            const equipesResult = await equipesResponse.json();
-            const usuariosResult = await usuariosResponse.json();
-
-            if (equipesResult.success) {
-                setEquipes(equipesResult.data || []);
-            } else {
-                throw new Error(equipesResult.error || 'Falha ao buscar equipes.');
-            }
-
-            if (usuariosResult.success) {
-                setUsuarios(usuariosResult.data || []);
-            } else {
-                throw new Error(usuariosResult.error || 'Falha ao buscar usuários.');
-            }
-        } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : 'Ocorreu um erro desconhecido.';
-            setError(errorMessage);
-            toast.error(`Erro ao carregar dados: ${errorMessage}`);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    // Busca os dados iniciais ao montar o componente
-    useEffect(() => {
-        fetchData();
-    }, []);
-    
     // Função genérica para chamadas POST
     const postData = async (action: string, payload: any) => {
         const loadingToastId = toast.loading('Processando sua solicitação...');
@@ -102,7 +62,7 @@ const EquipesPage: React.FC<EquipesPageProps> = ({ onNavigate, historicoOrganiza
         const success = await postData('create', novaEquipe);
         if (success) {
             setIsInserirModalOpen(false);
-            fetchData(); // Recarrega a lista
+            onDataUpdate(); // Pede para o App.tsx recarregar os dados
         }
     };
 
@@ -110,12 +70,11 @@ const EquipesPage: React.FC<EquipesPageProps> = ({ onNavigate, historicoOrganiza
         const success = await postData('update', equipeAtualizada);
         if (success) {
             setIsEditarModalOpen(false);
-            fetchData(); // Recarrega a lista
+            onDataUpdate(); // Pede para o App.tsx recarregar os dados
         }
     };
 
-    const handleDeleteEquipe = async (equipeParaExcluir: Equipe) => {
-        // Usando toast para confirmação (opcional, pode usar um modal de confirmação)
+    const handleDeleteEquipe = (equipeParaExcluir: Equipe) => {
         toast((t) => (
             <div className="flex flex-col gap-2">
                 <p>Tem certeza que deseja excluir a equipe <strong>"{equipeParaExcluir.nome}"</strong>?</p>
@@ -124,7 +83,7 @@ const EquipesPage: React.FC<EquipesPageProps> = ({ onNavigate, historicoOrganiza
                         onClick={async () => {
                             toast.dismiss(t.id);
                             const success = await postData('delete', { equipeId: equipeParaExcluir.id });
-                            if (success) fetchData(); // Recarrega a lista
+                            if (success) onDataUpdate(); // Pede para o App.tsx recarregar os dados
                         }}
                         className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-sm"
                     >
@@ -140,7 +99,7 @@ const EquipesPage: React.FC<EquipesPageProps> = ({ onNavigate, historicoOrganiza
             </div>
         ), { duration: 6000 });
     };
-
+    
     const handleOpenEditModal = (equipe: Equipe) => {
         setEquipeParaEditar(equipe);
         setIsEditarModalOpen(true);
@@ -150,7 +109,7 @@ const EquipesPage: React.FC<EquipesPageProps> = ({ onNavigate, historicoOrganiza
         setEquipeComHistorico(equipe);
         setIsHistoricoModalOpen(true);
     }
-    
+
     const filteredEquipes = useMemo(() => 
         equipes.filter(e => 
             e.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -162,7 +121,7 @@ const EquipesPage: React.FC<EquipesPageProps> = ({ onNavigate, historicoOrganiza
     <>
         <Toaster position="top-right" reverseOrder={false} />
         <section className="space-y-6 pb-8">
-            {/* Breadcrumbs (sem alterações) */}
+            {/* Breadcrumbs */}
             <div>
                 <nav className="flex" aria-label="Breadcrumb">
                 <ol className="inline-flex items-center space-x-1 md:space-x-2 rtl:space-x-reverse text-sm">
@@ -191,7 +150,7 @@ const EquipesPage: React.FC<EquipesPageProps> = ({ onNavigate, historicoOrganiza
                 </nav>
             </div>
             
-            {/* Header and Actions (sem alterações) */}
+            {/* Header and Actions */}
             <div className="bg-white dark:bg-slate-800/50 p-4 sm:p-6 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Gerenciamento de Equipes</h2>
@@ -219,16 +178,8 @@ const EquipesPage: React.FC<EquipesPageProps> = ({ onNavigate, historicoOrganiza
                 </div>
             </div>
 
-            {/* Renderização condicional para loading, erro e conteúdo */}
-            {isLoading ? (
-                <div className="text-center py-12 bg-white dark:bg-slate-800/50 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700/50">
-                    <p className="text-slate-500 dark:text-slate-400">Carregando equipes...</p>
-                </div>
-            ) : error ? (
-                <div className="text-center py-12 bg-red-50 dark:bg-red-900/20 rounded-lg shadow-sm border border-red-200 dark:border-red-700/50">
-                    <p className="text-red-600 dark:text-red-400"><strong>Falha ao carregar dados:</strong> {error}</p>
-                </div>
-            ) : filteredEquipes.length > 0 ? (
+            {/* Cards grid */}
+            {filteredEquipes.length > 0 ? (
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                     {filteredEquipes.map(equipe => (
                         <EquipeCard
@@ -255,7 +206,6 @@ const EquipesPage: React.FC<EquipesPageProps> = ({ onNavigate, historicoOrganiza
             )}
         </section>
 
-        {/* Modais agora recebem a lista de usuários da API */}
         <InserirEquipeModal 
             isOpen={isInserirModalOpen}
             onClose={() => setIsInserirModalOpen(false)}

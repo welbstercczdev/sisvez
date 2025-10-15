@@ -83,29 +83,44 @@ const App: React.FC = () => {
   const [feriasList, setFeriasList] = useState<Ferias[]>(DUMMY_FERIAS);
   const [historicoOrganizacoes, setHistoricoOrganizacoes] = useState<OrganizacaoSalva[]>(DUMMY_ORGANIZACOES_SALVAS);
 
-  useEffect(() => {
-    const fetchInitialData = async () => {
-      setIsLoadingData(true);
-      try {
-        const [usersRes, equipesRes] = await Promise.all([
-          fetch(`${GOOGLE_SCRIPT_URL}?api=usuarios`),
-          fetch(`${GOOGLE_SCRIPT_URL}?api=equipes`)
-        ]);
-        const usersResult = await usersRes.json();
-        const equipesResult = await equipesRes.json();
-        if (usersResult.success) setUsuarios(usersResult.data || []);
-        else throw new Error(usersResult.error || 'Falha ao buscar usuários.');
-        if (equipesResult.success) setEquipes(equipesResult.data || []);
-        else throw new Error(equipesResult.error || 'Falha ao buscar equipes.');
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar dados essenciais.';
-        toast.error(errorMessage);
-      } finally {
-        setIsLoadingData(false);
+  // ====================== MODIFICAÇÃO APLICADA AQUI ======================
+  // A função de busca foi movida para fora do useEffect para ser reutilizável
+  const fetchData = async () => {
+    // Não mostra o loader de página inteira para revalidações, apenas na carga inicial
+    if (!isLoadingData) {
+        toast.loading('Atualizando dados...', { id: 'refetching-data' });
+    } else {
+        setIsLoadingData(true);
+    }
+    
+    try {
+      const [usersRes, equipesRes] = await Promise.all([
+        fetch(`${GOOGLE_SCRIPT_URL}?api=usuarios`),
+        fetch(`${GOOGLE_SCRIPT_URL}?api=equipes`)
+      ]);
+      const usersResult = await usersRes.json();
+      const equipesResult = await equipesRes.json();
+      if (usersResult.success) setUsuarios(usersResult.data || []);
+      else throw new Error(usersResult.error || 'Falha ao buscar usuários.');
+      if (equipesResult.success) setEquipes(equipesResult.data || []);
+      else throw new Error(equipesResult.error || 'Falha ao buscar equipes.');
+      
+      if (!isLoadingData) {
+        toast.success('Dados atualizados!', { id: 'refetching-data' });
       }
-    };
-    fetchInitialData();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar dados essenciais.';
+      toast.error(errorMessage, { id: 'refetching-data' });
+    } finally {
+      if (isLoadingData) setIsLoadingData(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData(); // Chama a função na montagem inicial do componente
   }, []);
+  // =======================================================================
+
 
   useEffect(() => {
     const newStatuses = new Map<number | string, MembroComStatus>();
@@ -148,28 +163,15 @@ const App: React.FC = () => {
             const newGroupsMap = new Map(prevGroupsMap);
             let mapWasChanged = false;
 
-            // <-- CORREÇÃO APLICADA AQUI: Tipagem explícita para 'groups' e lógica de remapeamento melhorada
             newGroupsMap.forEach((groups: Grupo[], teamId) => {
-                // Passo 1: Remove o membro e filtra os grupos que ficaram vazios
                 const groupsWithMemberRemoved = groups
-                    .map(group => ({
-                        ...group,
-                        membros: group.membros.filter(m => m.id !== memberId),
-                    }))
+                    .map(group => ({ ...group, membros: group.membros.filter(m => m.id !== memberId) }))
                     .filter(g => g.membros.length > 0);
 
-                // Se não houve mudança no número de grupos, não há nada a fazer
-                if (groupsWithMemberRemoved.length === groups.length) {
-                    return;
-                }
+                if (groupsWithMemberRemoved.length === groups.length) return;
 
                 mapWasChanged = true;
-
-                // Passo 2: Renomeia os grupos restantes com base na nova lista filtrada
-                const finalGroups = groupsWithMemberRemoved.map(g =>
-                    updateGroupName(g, groupsWithMemberRemoved)
-                );
-
+                const finalGroups = groupsWithMemberRemoved.map(g => updateGroupName(g, groupsWithMemberRemoved));
                 newGroupsMap.set(teamId, finalGroups);
             });
             
@@ -219,7 +221,18 @@ const App: React.FC = () => {
       case 'mapas_classificacao': return <MapasClassificacaoPage onNavigate={handleNavigate} />;
       case 'pesquisar_fichas_vez': return <PesquisarFichasVezPage onNavigate={handleNavigate} />;
       case 'perfil': return <PerfilPage onNavigate={handleNavigate} />;
-      case 'equipes': return <EquipesPage onNavigate={handleNavigate} historicoOrganizacoes={historicoOrganizacoes} />;
+      
+      // ====================== MODIFICAÇÃO APLICADA AQUI ======================
+      case 'equipes': 
+        return <EquipesPage 
+                    onNavigate={handleNavigate} 
+                    historicoOrganizacoes={historicoOrganizacoes} 
+                    equipes={equipes}
+                    usuarios={usuarios}
+                    onDataUpdate={fetchData} // Passando a função para recarregar
+                />;
+      // =======================================================================
+
       case 'usuarios': return <UsuariosPage onNavigate={handleNavigate} />;
       case 'ferias': return <FeriasPage onNavigate={handleNavigate} feriasList={feriasList} setFeriasList={setFeriasList} allUsers={usuarios} />;
       case 'formacao_diaria': return <FormacaoDiariaPage onNavigate={handleNavigate} currentDate={currentDate} setCurrentDate={setCurrentDate} dailyStatuses={dailyStatuses} onStatusUpdate={updateMemberStatus} equipes={equipes} dailyGroups={dailyGroups} historicoOrganizacoes={historicoOrganizacoes} />;

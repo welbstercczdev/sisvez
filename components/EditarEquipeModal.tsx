@@ -8,70 +8,67 @@ interface EditarEquipeModalProps {
     onClose: () => void;
     onSave: (data: Equipe) => void;
     equipe: Equipe | null;
+    // Nova prop para receber a lista de usuários da API
+    usuarios: User[];
 }
 
-const DUMMY_USERS: User[] = [
-    { id: 1, name: 'Ana Silva' },
-    { id: 2, name: 'Bruno Costa' },
-    { id: 3, name: 'Carla Dias' },
-    { id: 4, name: 'Daniel Farias' },
-    { id: 5, name: 'Elisa Gomes' },
-    { id: 6, name: 'Fábio Lima' },
-    { id: 7, name: 'Mariana Oliveira' },
-    { id: 8, name: 'Pedro Martins' }
-];
-
-const EditarEquipeModal: React.FC<EditarEquipeModalProps> = ({ isOpen, onClose, onSave, equipe }) => {
-    const [nome, setNome] = useState('');
-    const [lider, setLider] = useState<User | null>(null);
-    const [membros, setMembros] = useState<User[]>([]);
-    const [status, setStatus] = useState<'Ativo' | 'Inativo'>('Ativo');
+const EditarEquipeModal: React.FC<EditarEquipeModalProps> = ({ isOpen, onClose, onSave, equipe, usuarios }) => {
+    // Usamos um único estado para o formulário, inicializado como nulo
+    const [formData, setFormData] = useState<Equipe | null>(null);
     const [error, setError] = useState<string | null>(null);
 
+    // Efeito para preencher o formulário quando uma equipe é selecionada
     useEffect(() => {
         if (isOpen && equipe) {
-            setNome(equipe.nome);
-            setLider(equipe.lider);
-            setMembros(equipe.membros);
-            setStatus(equipe.status);
-            setError(null);
-        } else if (!isOpen) {
-            // Reset form when modal is closed
-            setNome('');
-            setLider(null);
-            setMembros([]);
-            setStatus('Ativo');
+            setFormData(equipe);
             setError(null);
         }
     }, [isOpen, equipe]);
 
+    // Handler genérico para atualizar o estado do formulário
+    const handleInputChange = (field: keyof Equipe, value: any) => {
+        setFormData(prev => prev ? { ...prev, [field]: value } : null);
+    };
+    
+    // Handler específico para o select do líder
+    const handleLiderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const selectedUuid = e.target.value;
+        const selectedLider = usuarios.find(u => u.uuid === selectedUuid) || null;
+        if (selectedLider) {
+            handleInputChange('lider', selectedLider);
+        }
+    };
+    
+    // Handler para o MultiSelect de membros
+    const handleMembrosChange = (selectedMembros: User[]) => {
+        handleInputChange('membros', selectedMembros);
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!equipe) return;
-        if (!nome.trim()) {
+        if (!formData) return;
+
+        if (!formData.nome || !formData.nome.trim()) {
             setError('O nome da equipe é obrigatório.');
             return;
         }
-        if (!lider) {
+        if (!formData.lider) {
             setError('Selecione um líder.');
             return;
         }
-        if (membros.length === 0) {
+
+        // A verificação de pelo menos um membro é opcional, dependendo da sua regra de negócio.
+        // Se a equipe puder ter 0 membros, remova este bloco.
+        if (!formData.membros || formData.membros.length === 0) {
             setError('A equipe deve ter pelo menos um membro.');
             return;
         }
-
-        const equipeAtualizada: Equipe = {
-            id: equipe.id,
-            nome,
-            lider,
-            membros,
-            status,
-        };
-        onSave(equipeAtualizada);
+        
+        setError(null);
+        onSave(formData);
     };
 
-    if (!isOpen || !equipe) return null;
+    if (!isOpen || !formData) return null;
 
     return (
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-300" role="dialog" aria-modal="true">
@@ -86,21 +83,37 @@ const EditarEquipeModal: React.FC<EditarEquipeModalProps> = ({ isOpen, onClose, 
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="md:col-span-2">
                             <label htmlFor="edit_nome_equipe" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nome da Equipe</label>
-                            <input type="text" id="edit_nome_equipe" value={nome} onChange={(e) => setNome(e.target.value)} className="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm p-2 text-sm focus:ring-sky-500 focus:border-sky-500" placeholder="Ex: Equipe de Campo - Setor 1" />
+                            <input 
+                                type="text" 
+                                id="edit_nome_equipe" 
+                                value={formData.nome} 
+                                onChange={(e) => handleInputChange('nome', e.target.value)} 
+                                className="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm p-2 text-sm focus:ring-sky-500 focus:border-sky-500" 
+                                placeholder="Ex: Equipe de Campo - Setor 1" 
+                            />
                         </div>
                         <div className="md:col-span-2">
                             <label htmlFor="edit_lider" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Líder</label>
-                            <select id="edit_lider" value={lider?.id || ''} onChange={(e) => setLider(DUMMY_USERS.find(u => u.id === parseInt(e.target.value)) || null)} className="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm p-2 text-sm focus:ring-sky-500 focus:border-sky-500">
+                            <select 
+                                id="edit_lider" 
+                                value={formData.lider?.uuid || ''} 
+                                onChange={handleLiderChange} 
+                                className="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm p-2 text-sm focus:ring-sky-500 focus:border-sky-500"
+                            >
                                 <option value="">-- Selecione um Líder --</option>
-                                {DUMMY_USERS.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
+                                {usuarios.map(user => (
+                                    <option key={user.uuid} value={user.uuid}>
+                                        {user.name} ({user.id})
+                                    </option>
+                                ))}
                             </select>
                         </div>
                         <div className="md:col-span-2">
                              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Membros</label>
                              <MultiSelect
-                                options={DUMMY_USERS}
-                                selectedValues={membros}
-                                onChange={setMembros}
+                                options={usuarios} // Passa a lista de usuários da API
+                                selectedValues={formData.membros || []}
+                                onChange={handleMembrosChange}
                                 placeholder="Selecione os membros..."
                              />
                         </div>
@@ -108,11 +121,23 @@ const EditarEquipeModal: React.FC<EditarEquipeModalProps> = ({ isOpen, onClose, 
                              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Status</label>
                              <div className="flex items-center space-x-4">
                                 <label className="flex items-center">
-                                    <input type="radio" value="Ativo" checked={status === 'Ativo'} onChange={(e) => setStatus(e.target.value as any)} className="h-4 w-4 text-sky-600 border-slate-300 focus:ring-sky-500" />
+                                    <input 
+                                        type="radio" 
+                                        value="Ativo" 
+                                        checked={formData.status === 'Ativo'} 
+                                        onChange={(e) => handleInputChange('status', e.target.value as any)} 
+                                        className="h-4 w-4 text-sky-600 border-slate-300 focus:ring-sky-500" 
+                                    />
                                     <span className="ml-2 text-sm text-slate-700 dark:text-slate-300">Ativo</span>
                                 </label>
                                 <label className="flex items-center">
-                                    <input type="radio" value="Inativo" checked={status === 'Inativo'} onChange={(e) => setStatus(e.target.value as any)} className="h-4 w-4 text-sky-600 border-slate-300 focus:ring-sky-500" />
+                                    <input 
+                                        type="radio" 
+                                        value="Inativo" 
+                                        checked={formData.status === 'Inativo'} 
+                                        onChange={(e) => handleInputChange('status', e.target.value as any)} 
+                                        className="h-4 w-4 text-sky-600 border-slate-300 focus:ring-sky-500" 
+                                    />
                                     <span className="ml-2 text-sm text-slate-700 dark:text-slate-300">Inativo</span>
                                 </label>
                              </div>
@@ -129,4 +154,5 @@ const EditarEquipeModal: React.FC<EditarEquipeModalProps> = ({ isOpen, onClose, 
         </div>
     );
 };
+
 export default EditarEquipeModal;

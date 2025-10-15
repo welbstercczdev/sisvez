@@ -22,10 +22,15 @@ const EquipeCard: React.FC<EquipeCardProps> = ({ equipe, onEdit, onDelete, onHis
             <div className="p-4 flex justify-between items-start">
                 <div className="flex-grow pr-4">
                     <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100">{equipe.nome}</h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-1">
+                    {/* ====================== MODIFICAÇÃO DO LÍDER ====================== */}
+                    <div className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-1">
                         <PersonIcon className="w-4 h-4" />
-                        Líder: {equipe.lider.name}
-                    </p>
+                        <div>
+                            <span>Líder: {equipe.lider.name}</span>
+                            <span className="font-mono text-xs ml-2 text-slate-400 dark:text-slate-500">({equipe.lider.id})</span>
+                        </div>
+                    </div>
+                    {/* ==================================================================== */}
                 </div>
                 <div className="flex-shrink-0">
                     <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusStyles[equipe.status]}`}>
@@ -47,10 +52,19 @@ const EquipeCard: React.FC<EquipeCardProps> = ({ equipe, onEdit, onDelete, onHis
                 </button>
                 <div className={`grid transition-all duration-300 ease-in-out ${isExpanded ? 'grid-rows-[1fr] pt-2' : 'grid-rows-[0fr]'}`}>
                     <div className="overflow-hidden">
-                        <ul className="space-y-1 pl-7 text-sm text-slate-500 dark:text-slate-400 max-h-32 overflow-y-auto">
-                            {equipe.membros.map(membro => <li key={membro.id}>- {membro.name}</li>)}
-                            {equipe.membros.length === 0 && <li>Nenhum membro na equipe.</li>}
+                        {/* ====================== MODIFICAÇÃO DOS MEMBROS ====================== */}
+                        <ul className="space-y-2 pl-7 text-sm text-slate-500 dark:text-slate-400 max-h-32 overflow-y-auto">
+                            {equipe.membros.map(membro => (
+                                <li key={membro.uuid}>
+                                    <div className="flex justify-between items-baseline">
+                                        <span className="text-slate-700 dark:text-slate-300">{membro.name}</span>
+                                        <span className="font-mono text-xs text-slate-400 dark:text-slate-500">{membro.id}</span>
+                                    </div>
+                                </li>
+                            ))}
+                            {equipe.membros.length === 0 && <li className="italic">Nenhum membro na equipe.</li>}
                         </ul>
+                        {/* ======================================================================= */}
                     </div>
                 </div>
             </div>
