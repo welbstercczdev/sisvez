@@ -8,11 +8,11 @@ interface EditarEquipeModalProps {
     onClose: () => void;
     onSave: (data: Equipe) => void;
     equipe: Equipe | null;
-    // Nova prop para receber a lista de usuários da API
-    usuarios: User[];
+    // Prop atualizada para receber a lista de usuários já filtrada
+    availableUsers: User[];
 }
 
-const EditarEquipeModal: React.FC<EditarEquipeModalProps> = ({ isOpen, onClose, onSave, equipe, usuarios }) => {
+const EditarEquipeModal: React.FC<EditarEquipeModalProps> = ({ isOpen, onClose, onSave, equipe, availableUsers }) => {
     // Usamos um único estado para o formulário, inicializado como nulo
     const [formData, setFormData] = useState<Equipe | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -22,6 +22,9 @@ const EditarEquipeModal: React.FC<EditarEquipeModalProps> = ({ isOpen, onClose, 
         if (isOpen && equipe) {
             setFormData(equipe);
             setError(null);
+        } else if (!isOpen) {
+            // Limpa o formulário quando o modal é fechado
+            setFormData(null);
         }
     }, [isOpen, equipe]);
 
@@ -33,7 +36,7 @@ const EditarEquipeModal: React.FC<EditarEquipeModalProps> = ({ isOpen, onClose, 
     // Handler específico para o select do líder
     const handleLiderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const selectedUuid = e.target.value;
-        const selectedLider = usuarios.find(u => u.uuid === selectedUuid) || null;
+        const selectedLider = availableUsers.find(u => u.uuid === selectedUuid) || null;
         if (selectedLider) {
             handleInputChange('lider', selectedLider);
         }
@@ -54,13 +57,6 @@ const EditarEquipeModal: React.FC<EditarEquipeModalProps> = ({ isOpen, onClose, 
         }
         if (!formData.lider) {
             setError('Selecione um líder.');
-            return;
-        }
-
-        // A verificação de pelo menos um membro é opcional, dependendo da sua regra de negócio.
-        // Se a equipe puder ter 0 membros, remova este bloco.
-        if (!formData.membros || formData.membros.length === 0) {
-            setError('A equipe deve ter pelo menos um membro.');
             return;
         }
         
@@ -101,7 +97,8 @@ const EditarEquipeModal: React.FC<EditarEquipeModalProps> = ({ isOpen, onClose, 
                                 className="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm p-2 text-sm focus:ring-sky-500 focus:border-sky-500"
                             >
                                 <option value="">-- Selecione um Líder --</option>
-                                {usuarios.map(user => (
+                                {/* Popula o select com os usuários DISPONÍVEIS para esta edição */}
+                                {availableUsers.map(user => (
                                     <option key={user.uuid} value={user.uuid}>
                                         {user.name} ({user.id})
                                     </option>
@@ -111,7 +108,8 @@ const EditarEquipeModal: React.FC<EditarEquipeModalProps> = ({ isOpen, onClose, 
                         <div className="md:col-span-2">
                              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Membros</label>
                              <MultiSelect
-                                options={usuarios} // Passa a lista de usuários da API
+                                // A lista de opções não deve incluir o líder atualmente selecionado
+                                options={availableUsers.filter(u => u.uuid !== formData.lider?.uuid)}
                                 selectedValues={formData.membros || []}
                                 onChange={handleMembrosChange}
                                 placeholder="Selecione os membros..."
