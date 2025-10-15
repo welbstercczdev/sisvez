@@ -39,16 +39,13 @@ const getTodayPlusDays = (days: number): string => {
     return date.toISOString().split('T')[0];
 };
 
-// DUMMY_FERIAS atualizado para corresponder à nova interface User (com uuid e roles)
 const DUMMY_FERIAS: Ferias[] = [
     { id: 'FER-1', funcionario: { uuid: 'dummy-uuid-5', id: 5, name: 'Elisa Gomes', roles: [] }, dataInicio: getTodayPlusDays(-5), dataFim: getTodayPlusDays(10), status: 'Em Andamento' },
     { id: 'FER-2', funcionario: { uuid: 'dummy-uuid-8', id: 8, name: 'Pedro Martins', roles: [] }, dataInicio: getTodayPlusDays(15), dataFim: getTodayPlusDays(30), status: 'Agendada' },
-    { id: 'FER-3', funcionario: { uuid: 'dummy-uuid-2', id: 2, name: 'Bruno Costa', roles: [] }, dataInicio: getTodayPlusDays(-30), dataFim: getTodayPlusDays(-15), status: 'Concluída' },
 ];
 
 const DUMMY_ORGANIZACOES_SALVAS: OrganizacaoSalva[] = [
     // Seus dados de DUMMY_ORGANIZACOES_SALVAS podem ser colados aqui.
-    // Lembre-se de que os objetos User dentro deles também precisam ser atualizados com `uuid` e `roles`.
 ];
 
 const updateGroupName = (group: Grupo, allGroups: Grupo[]): Grupo => {
@@ -145,19 +142,37 @@ const App: React.FC = () => {
         }
         return newStatuses;
     });
+
     if (status !== 'Ativo') {
         setDailyGroups(prevGroupsMap => {
             const newGroupsMap = new Map(prevGroupsMap);
             let mapWasChanged = false;
-            newGroupsMap.forEach((groups, teamId) => {
-                const updatedGroups = groups.map(group => ({
-                    ...group,
-                    membros: group.membros.filter(m => m.id !== memberId),
-                })).filter(g => g.membros.length > 0)
-                 .map(g => updateGroupName(g, groups));
-                if (updatedGroups.length < groups.length) mapWasChanged = true;
-                newGroupsMap.set(teamId, updatedGroups);
+
+            // <-- CORREÇÃO APLICADA AQUI: Tipagem explícita para 'groups' e lógica de remapeamento melhorada
+            newGroupsMap.forEach((groups: Grupo[], teamId) => {
+                // Passo 1: Remove o membro e filtra os grupos que ficaram vazios
+                const groupsWithMemberRemoved = groups
+                    .map(group => ({
+                        ...group,
+                        membros: group.membros.filter(m => m.id !== memberId),
+                    }))
+                    .filter(g => g.membros.length > 0);
+
+                // Se não houve mudança no número de grupos, não há nada a fazer
+                if (groupsWithMemberRemoved.length === groups.length) {
+                    return;
+                }
+
+                mapWasChanged = true;
+
+                // Passo 2: Renomeia os grupos restantes com base na nova lista filtrada
+                const finalGroups = groupsWithMemberRemoved.map(g =>
+                    updateGroupName(g, groupsWithMemberRemoved)
+                );
+
+                newGroupsMap.set(teamId, finalGroups);
             });
+            
             return mapWasChanged ? newGroupsMap : prevGroupsMap;
         });
     }
@@ -204,10 +219,8 @@ const App: React.FC = () => {
       case 'mapas_classificacao': return <MapasClassificacaoPage onNavigate={handleNavigate} />;
       case 'pesquisar_fichas_vez': return <PesquisarFichasVezPage onNavigate={handleNavigate} />;
       case 'perfil': return <PerfilPage onNavigate={handleNavigate} />;
-      
       case 'equipes': return <EquipesPage onNavigate={handleNavigate} historicoOrganizacoes={historicoOrganizacoes} />;
       case 'usuarios': return <UsuariosPage onNavigate={handleNavigate} />;
-      
       case 'ferias': return <FeriasPage onNavigate={handleNavigate} feriasList={feriasList} setFeriasList={setFeriasList} allUsers={usuarios} />;
       case 'formacao_diaria': return <FormacaoDiariaPage onNavigate={handleNavigate} currentDate={currentDate} setCurrentDate={setCurrentDate} dailyStatuses={dailyStatuses} onStatusUpdate={updateMemberStatus} equipes={equipes} dailyGroups={dailyGroups} historicoOrganizacoes={historicoOrganizacoes} />;
       case 'organizar_equipes': return <OrganizarEquipesPage onNavigate={handleNavigate} currentDate={currentDate} setCurrentDate={setCurrentDate} dailyStatuses={dailyStatuses} onStatusUpdate={updateMemberStatus} equipes={equipes} dailyGroups={dailyGroups} onGroupsUpdate={updateDailyGroups} historicoOrganizacoes={historicoOrganizacoes} onHistoricoUpdate={setHistoricoOrganizacoes} />;
