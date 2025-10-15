@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, {useState, useEffect } from 'react';
 import { NavItem } from '../types';
 import { FireIcon, ContactsBookIcon, MapIcon, ComputerIcon, ChevronDownIcon } from './icons/IconComponents';
 
@@ -30,6 +30,7 @@ const navItems: NavItem[] = [
       { id: 'cadastro_funcional', title: 'Cadastro Funcional' },
       { id: 'ferias', title: 'Férias' },
       { id: 'equipes', title: 'Equipes' },
+      { id: 'usuarios', title: 'Usuários' }, // <-- ADICIONADO O LINK PARA A PÁGINA DE USUÁRIOS
       { id: 'formacao_diaria', title: 'Formação Diária' },
       { id: 'organizar_equipes', title: 'Organizar Equipe' },
     ],
@@ -73,8 +74,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activePage, onNavigate }) => 
 
   useEffect(() => {
     const activeParent = navItems.find(item => 
-      item.children?.some(child => child.id === activePage) ||
-      (activePage === 'mapas_classificacao' && item.id === 'arboviroses')
+      item.children?.some(child => child.id === activePage)
     );
     if (activeParent) {
       setOpenMenu(activeParent.id);

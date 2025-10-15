@@ -61,7 +61,8 @@ export interface Agrupamento {
 }
 
 export interface User {
-  id: number;
+  uuid: string;
+  id: number | string; 
   name: string;
 }
 
