@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
 import { HomeIcon, PlusIcon, PencilIcon, TrashIcon } from '../components/icons/IconComponents';
-import { User, Role } from '../types'; // Tipo atualizado
+import { User, Role } from '../types';
 import InserirUsuarioModal from '../components/InserirUsuarioModal';
 import EditarUsuarioModal from '../components/EditarUsuarioModal';
 
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyotEdB0INfTNUK9q6MKbHEMQFUzwi5rMYnfZ6tQ7OaQ4ojOa9J3ItXqNsjjEl4XqN0/exec';
 
-// Função helper renomeada
 const getRoleBadgeColor = (role: Role) => {
     switch(role) {
         case 'Admin': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
@@ -75,8 +74,8 @@ const UsuariosPage: React.FC<UsuariosPageProps> = ({ onNavigate }) => {
         }
     };
 
-    const handleSaveUsuario = async (name: string) => {
-        const success = await postData('create', { name });
+    const handleSaveUsuario = async (data: { id: string, name: string }) => {
+        const success = await postData('create', data);
         if (success) {
             setIsInserirModalOpen(false);
             fetchData();
@@ -84,6 +83,7 @@ const UsuariosPage: React.FC<UsuariosPageProps> = ({ onNavigate }) => {
     };
 
     const handleUpdateUsuario = async (user: User) => {
+        // O payload agora é o objeto de usuário inteiro, já que o ID também pode ser editado.
         const success = await postData('update', user);
         if (success) {
             setIsEditarModalOpen(false);
@@ -96,7 +96,7 @@ const UsuariosPage: React.FC<UsuariosPageProps> = ({ onNavigate }) => {
             <div className="flex flex-col gap-2">
                 <p>Excluir <strong>"{user.name}"</strong>? Esta ação não pode ser desfeita.</p>
                 <div className="flex gap-2">
-                    <button onClick={async () => { toast.dismiss(t.id); const success = await postData('delete', { id: user.id }); if (success) fetchData(); }} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-sm">Excluir</button>
+                    <button onClick={async () => { toast.dismiss(t.id); const success = await postData('delete', { uuid: user.uuid }); if (success) fetchData(); }} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-sm">Excluir</button>
                     <button onClick={() => toast.dismiss(t.id)} className="w-full bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-1 px-2 rounded text-sm">Cancelar</button>
                 </div>
             </div>
