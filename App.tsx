@@ -39,13 +39,16 @@ const getTodayPlusDays = (days: number): string => {
     return date.toISOString().split('T')[0];
 };
 
+// DUMMY_FERIAS atualizado para corresponder à nova interface User (com uuid e roles)
 const DUMMY_FERIAS: Ferias[] = [
-    { id: 'FER-1', funcionario: { uuid: 'uuid-elisa', id: 5, name: 'Elisa Gomes' }, dataInicio: getTodayPlusDays(-5), dataFim: getTodayPlusDays(10), status: 'Em Andamento' },
-    { id: 'FER-2', funcionario: { uuid: 'uuid-pedro', id: 8, name: 'Pedro Martins' }, dataInicio: getTodayPlusDays(15), dataFim: getTodayPlusDays(30), status: 'Agendada' },
+    { id: 'FER-1', funcionario: { uuid: 'dummy-uuid-5', id: 5, name: 'Elisa Gomes', roles: [] }, dataInicio: getTodayPlusDays(-5), dataFim: getTodayPlusDays(10), status: 'Em Andamento' },
+    { id: 'FER-2', funcionario: { uuid: 'dummy-uuid-8', id: 8, name: 'Pedro Martins', roles: [] }, dataInicio: getTodayPlusDays(15), dataFim: getTodayPlusDays(30), status: 'Agendada' },
+    { id: 'FER-3', funcionario: { uuid: 'dummy-uuid-2', id: 2, name: 'Bruno Costa', roles: [] }, dataInicio: getTodayPlusDays(-30), dataFim: getTodayPlusDays(-15), status: 'Concluída' },
 ];
 
 const DUMMY_ORGANIZACOES_SALVAS: OrganizacaoSalva[] = [
-    // Seus dados de DUMMY_ORGANIZACOES_SALVAS podem ser colados aqui
+    // Seus dados de DUMMY_ORGANIZACOES_SALVAS podem ser colados aqui.
+    // Lembre-se de que os objetos User dentro deles também precisam ser atualizados com `uuid` e `roles`.
 ];
 
 const updateGroupName = (group: Grupo, allGroups: Grupo[]): Grupo => {
@@ -202,10 +205,7 @@ const App: React.FC = () => {
       case 'pesquisar_fichas_vez': return <PesquisarFichasVezPage onNavigate={handleNavigate} />;
       case 'perfil': return <PerfilPage onNavigate={handleNavigate} />;
       
-      // ROTA PARA A PÁGINA DE EQUIPES
       case 'equipes': return <EquipesPage onNavigate={handleNavigate} historicoOrganizacoes={historicoOrganizacoes} />;
-      
-      // ROTA PARA A NOVA PÁGINA DE USUÁRIOS
       case 'usuarios': return <UsuariosPage onNavigate={handleNavigate} />;
       
       case 'ferias': return <FeriasPage onNavigate={handleNavigate} feriasList={feriasList} setFeriasList={setFeriasList} allUsers={usuarios} />;

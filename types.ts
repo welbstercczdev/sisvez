@@ -1,7 +1,17 @@
-// ====================== CORREÇÃO APLICADA AQUI ======================
-// Adiciona a importação do React para que o tipo 'React.ComponentType' seja reconhecido.
 import React from 'react';
-// =======================================================================
+
+// ====================== MODIFICAÇÕES APLICADAS AQUI ======================
+
+// 1. Renomeado para refletir que são permissões de sistema (Roles)
+export const ROLES_DISPONIVEIS = [
+  'Admin',
+  'Supervisor',
+  'Agente de Campo',
+  'Analista',
+  'Convidado'
+] as const;
+
+export type Role = typeof ROLES_DISPONIVEIS[number]; // 2. Tipo renomeado para Role
 
 export interface NavItem {
   id: string;
@@ -36,7 +46,7 @@ export interface Atividade {
     PAC_BAIR: string;
     PAC_REG: string;
     PAC_CDD: string;
-    CLASSIF: string; // Internal classification, not from CSV
+    CLASSIF: string;
     isAgrupamento?: boolean;
     agrupamentoNome?: string;
     statusControleCriadouros?: 'Pendente' | 'Demandado';
@@ -62,8 +72,9 @@ export interface Agrupamento {
 
 export interface User {
   uuid: string;
-  id: number | string; 
+  id: number | string;
   name: string;
+  roles: Role[]; // 3. Propriedade renomeada de 'funcoes' para 'roles'
 }
 
 export type HistoricoAcao = 'criacao' | 'edicao_nome' | 'troca_lider' | 'add_membro' | 'rem_membro' | 'mudanca_status';
@@ -111,8 +122,10 @@ export interface FormacaoDiaria {
   observacoes: string;
 }
 
+// Esta definição de 'Funcao' permanece, pois se refere às tarefas operacionais do dia.
 export type Funcao = 'Aplicador' | 'Anotador' | 'Facilitador' | 'Motorista' | 'Operador';
 
+// Agora 'MembroComFuncao' pode estender 'User' sem conflito.
 export interface MembroComFuncao extends User {
   funcoes: Funcao[];
 }
@@ -132,8 +145,8 @@ export interface MembroComStatus extends User {
 
 export interface OrganizacaoSalva {
   id: string;
-  data: string; // The date the organization was FOR (e.g., '2024-08-15')
-  dataSalvamento: string; // ISO string of when it was saved
+  data: string;
+  dataSalvamento: string;
   usuarioSalvo: User;
   equipe: Equipe;
   grupos: Grupo[];
