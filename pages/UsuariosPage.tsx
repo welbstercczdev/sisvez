@@ -1,34 +1,23 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
-import { HomeIcon, PlusIcon, PencilIcon, TrashIcon, SearchIcon, ChevronDownIcon } from '../components/icons/IconComponents';
-import { User, Role, ROLES_DISPONIVEIS } from '../types';
+import { HomeIcon, PlusIcon, PencilIcon, TrashIcon, SearchIcon, ChevronDownIcon, SettingsIcon } from '../components/icons/IconComponents';
+import { User, Role } from '../types';
 import InserirUsuarioModal from '../components/InserirUsuarioModal';
 import EditarUsuarioModal from '../components/EditarUsuarioModal';
+import GerenciarRolesModal from '../components/GerenciarRolesModal'; // Importar o novo modal
 
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyotEdB0INfTNUK9q6MKbHEMQFUzwi5rMYnfZ6tQ7OaQ4ojOa9J3ItXqNsjjEl4XqN0/exec'; // SUBSTITUA PELA SUA URL REAL
-
-// Helper para dar cores aos badges de função
-const getRoleBadgeColor = (role: Role) => {
-    switch(role) {
-        case 'Admin': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
-        case 'Supervisor': return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300';
-        case 'Líder': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
-        case 'ACE': return 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-300';
-        case 'Analista': return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300';
-        case 'Convidado': return 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300';
-        default: return 'bg-gray-100 text-gray-800';
-    }
-}
 
 // Componente para a Barra de Ações em Massa
 interface BulkActionsBarProps {
     selectedCount: number;
+    roles: Role[]; // Recebe a lista de roles dinâmicas
     onClearSelection: () => void;
-    onBulkAddRole: (role: Role) => void;
-    onBulkRemoveRole: (role: Role) => void;
+    onBulkAddRole: (roleName: string) => void;
+    onBulkRemoveRole: (roleName: string) => void;
 }
 
-const BulkActionsBar: React.FC<BulkActionsBarProps> = ({ selectedCount, onClearSelection, onBulkAddRole, onBulkRemoveRole }) => {
+const BulkActionsBar: React.FC<BulkActionsBarProps> = ({ selectedCount, roles, onClearSelection, onBulkAddRole, onBulkRemoveRole }) => {
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [isRemoveOpen, setIsRemoveOpen] = useState(false);
 
@@ -45,9 +34,9 @@ const BulkActionsBar: React.FC<BulkActionsBarProps> = ({ selectedCount, onClearS
                 </button>
                 {isAddOpen && (
                     <div className="absolute bottom-full mb-2 w-48 bg-white dark:bg-slate-700 rounded-md shadow-lg border dark:border-slate-600">
-                        {ROLES_DISPONIVEIS.map(role => (
-                            <button key={role} onClick={() => { onBulkAddRole(role); setIsAddOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600">
-                                {role}
+                        {roles.map(role => (
+                            <button key={role.uuid} onClick={() => { onBulkAddRole(role.name); setIsAddOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600">
+                                {role.name}
                             </button>
                         ))}
                     </div>
@@ -61,9 +50,9 @@ const BulkActionsBar: React.FC<BulkActionsBarProps> = ({ selectedCount, onClearS
                 </button>
                 {isRemoveOpen && (
                      <div className="absolute bottom-full mb-2 w-48 bg-white dark:bg-slate-700 rounded-md shadow-lg border dark:border-slate-600">
-                        {ROLES_DISPONIVEIS.map(role => (
-                            <button key={role} onClick={() => { onBulkRemoveRole(role); setIsRemoveOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600">
-                                {role}
+                        {roles.map(role => (
+                            <button key={role.uuid} onClick={() => { onBulkRemoveRole(role.name); setIsRemoveOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600">
+                                {role.name}
                             </button>
                         ))}
                     </div>
@@ -81,25 +70,32 @@ interface UsuariosPageProps {
 
 const UsuariosPage: React.FC<UsuariosPageProps> = ({ onNavigate }) => {
     const [usuarios, setUsuarios] = useState<User[]>([]);
+    const [allRoles, setAllRoles] = useState<Role[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedUserUuids, setSelectedUserUuids] = useState<string[]>([]);
     const [isInserirModalOpen, setIsInserirModalOpen] = useState(false);
     const [isEditarModalOpen, setIsEditarModalOpen] = useState(false);
+    const [isGerenciarRolesModalOpen, setIsGerenciarRolesModalOpen] = useState(false);
     const [usuarioParaEditar, setUsuarioParaEditar] = useState<User | null>(null);
     
     const fetchData = async () => {
         setIsLoading(true);
         setError(null);
         try {
-            const response = await fetch(`${GOOGLE_SCRIPT_URL}?api=usuarios`);
-            const result = await response.json();
-            if (result.success) {
-                setUsuarios(result.data || []);
-            } else {
-                throw new Error(result.error || 'Falha ao buscar usuários.');
-            }
+            const [usersRes, rolesRes] = await Promise.all([
+                fetch(`${GOOGLE_SCRIPT_URL}?api=usuarios`),
+                fetch(`${GOOGLE_SCRIPT_URL}?api=roles`),
+            ]);
+            const usersResult = await usersRes.json();
+            const rolesResult = await rolesRes.json();
+
+            if (usersResult.success) setUsuarios(usersResult.data || []);
+            else throw new Error(usersResult.error || "Falha ao buscar usuários.");
+
+            if (rolesResult.success) setAllRoles(rolesResult.data || []);
+            else throw new Error(rolesResult.error || "Falha ao buscar permissões.");
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Ocorreu um erro.';
             setError(errorMessage);
@@ -109,22 +105,20 @@ const UsuariosPage: React.FC<UsuariosPageProps> = ({ onNavigate }) => {
         }
     };
 
-    useEffect(() => {
-        fetchData();
-    }, []);
+    useEffect(() => { fetchData(); }, []);
 
-    const postData = async (action: string, payload: any) => {
-        const loadingToastId = toast.loading('Processando sua solicitação...');
+    const postData = async (api: 'usuarios' | 'roles', action: string, payload: any) => {
+        const loadingToastId = toast.loading('Processando...');
         try {
             const response = await fetch(GOOGLE_SCRIPT_URL, {
                 method: 'POST',
                 redirect: 'follow',
-                body: JSON.stringify({ api: 'usuarios', action, payload }),
+                body: JSON.stringify({ api, action, payload }),
                 headers: { "Content-Type": "text/plain;charset=utf-8" },
             });
             const result = await response.json();
             if (!result.success) throw new Error(result.error);
-            toast.success(result.message, { id: loadingToastId });
+            toast.success(result.message || 'Operação bem-sucedida!', { id: loadingToastId });
             return true;
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Ocorreu um erro.';
@@ -134,37 +128,36 @@ const UsuariosPage: React.FC<UsuariosPageProps> = ({ onNavigate }) => {
     };
 
     const handleSaveUsuario = async (data: { id: string, name: string }) => {
-        const success = await postData('create', data);
-        if (success) {
-            setIsInserirModalOpen(false);
-            fetchData();
-        }
+        const success = await postData('usuarios', 'create', data);
+        if (success) { setIsInserirModalOpen(false); fetchData(); }
     };
 
     const handleUpdateUsuario = async (user: User) => {
-        const success = await postData('update', user);
-        if (success) {
-            setIsEditarModalOpen(false);
-            fetchData();
-        }
+        const success = await postData('usuarios', 'update', user);
+        if (success) { setIsEditarModalOpen(false); fetchData(); }
     };
-    
+
     const handleDeleteUsuario = (user: User) => {
         toast((t) => (
             <div className="flex flex-col gap-2">
-                <p>Excluir <strong>"{user.name}"</strong>? Esta ação não pode ser desfeita.</p>
+                <p>Excluir <strong>"{user.name}"</strong>?</p>
                 <div className="flex gap-2">
-                    <button onClick={async () => { toast.dismiss(t.id); const success = await postData('delete', { uuid: user.uuid }); if (success) fetchData(); }} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-sm">Excluir</button>
+                    <button onClick={async () => { toast.dismiss(t.id); const success = await postData('usuarios', 'delete', { uuid: user.uuid }); if (success) fetchData(); }} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-sm">Excluir</button>
                     <button onClick={() => toast.dismiss(t.id)} className="w-full bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-1 px-2 rounded text-sm">Cancelar</button>
                 </div>
             </div>
-        ), { duration: 6000, position: "top-center" });
+        ), { duration: 6000, position: 'top-center' });
     };
 
-    const handleOpenEditModal = (user: User) => {
-        setUsuarioParaEditar(user);
-        setIsEditarModalOpen(true);
+    const handleBulkAction = async (updateAction: { type: 'addRole' | 'removeRole', role: string }) => {
+        const success = await postData('usuarios', 'bulkUpdate', { uuids: selectedUserUuids, updateAction });
+        if (success) { setSelectedUserUuids([]); fetchData(); }
     };
+
+    // Funções para CRUD de Roles
+    const handleSaveRole = async (role: Omit<Role, 'uuid'>) => postData('roles', 'create', role).then(s => { if(s) fetchData(); return s; });
+    const handleUpdateRole = async (role: Role) => postData('roles', 'update', role).then(s => { if(s) fetchData(); return s; });
+    const handleDeleteRole = async (role: Role) => postData('roles', 'delete', { uuid: role.uuid }).then(s => { if(s) fetchData(); return s; });
 
     const filteredUsuarios = useMemo(() => {
         const lowercasedFilter = searchTerm.toLowerCase();
@@ -174,45 +167,23 @@ const UsuariosPage: React.FC<UsuariosPageProps> = ({ onNavigate }) => {
         );
     }, [usuarios, searchTerm]);
 
-    const handleSelectUser = (uuid: string) => {
-        setSelectedUserUuids(prev => 
-            prev.includes(uuid) ? prev.filter(id => id !== uuid) : [...prev, uuid]
-        );
-    };
+    const handleSelectUser = (uuid: string) => setSelectedUserUuids(prev => prev.includes(uuid) ? prev.filter(id => id !== uuid) : [...prev, uuid]);
+    const handleSelectAll = () => setSelectedUserUuids(selectedUserUuids.length === filteredUsuarios.length ? [] : filteredUsuarios.map(u => u.uuid));
+    const handleOpenEditModal = (user: User) => { setUsuarioParaEditar(user); setIsEditarModalOpen(true); };
 
-    const handleSelectAll = () => {
-        if (selectedUserUuids.length === filteredUsuarios.length) {
-            setSelectedUserUuids([]);
-        } else {
-            setSelectedUserUuids(filteredUsuarios.map(u => u.uuid));
-        }
-    };
-    
-    const handleBulkAction = async (updateAction: { type: 'addRole' | 'removeRole', role: Role }) => {
-        const success = await postData('bulkUpdate', { uuids: selectedUserUuids, updateAction });
-        if (success) {
-            setSelectedUserUuids([]);
-            fetchData();
-        }
-    };
+    const getRoleColor = (roleName: string) => allRoles.find(r => r.name === roleName)?.color || '#cccccc';
 
     return (
         <>
             <Toaster position="top-right" />
-            <section className="space-y-6 pb-20"> {/* Aumentado o padding-bottom para a barra não cobrir conteúdo */}
+            <section className="space-y-6 pb-20">
                 {/* Breadcrumbs */}
                 <div>
                      <nav className="flex" aria-label="Breadcrumb">
                         <ol className="inline-flex items-center space-x-1 md:space-x-2 rtl:space-x-reverse text-sm">
-                            <li className="inline-flex items-center">
-                                <button onClick={() => onNavigate('dashboard')} className="inline-flex items-center font-medium text-slate-500 dark:text-slate-400 hover:text-sky-600 dark:hover:text-white transition-colors duration-200"><HomeIcon className="w-4 h-4 me-2.5" /></button>
-                            </li>
-                            <li>
-                                <div className="flex items-center"><svg className="rtl:rotate-180 w-3 h-3 text-slate-400 dark:text-slate-500 mx-1" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10"><path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m1 9 4-4-4-4"/></svg><span className="ms-1 font-medium text-slate-500 dark:text-slate-400 md:ms-2">Recursos Humanos</span></div>
-                            </li>
-                            <li aria-current="page">
-                                <div className="flex items-center"><svg className="rtl:rotate-180 w-3 h-3 text-slate-400 dark:text-slate-500 mx-1" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10"><path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m1 9 4-4-4-4"/></svg><span className="ms-1 font-medium text-slate-400 dark:text-slate-500 md:ms-2">Usuários</span></div>
-                            </li>
+                            <li className="inline-flex items-center"><button onClick={() => onNavigate('dashboard')} className="inline-flex items-center font-medium text-slate-500 dark:text-slate-400 hover:text-sky-600 dark:hover:text-white transition-colors duration-200"><HomeIcon className="w-4 h-4 me-2.5" /></button></li>
+                            <li><div className="flex items-center"><svg className="rtl:rotate-180 w-3 h-3 text-slate-400 dark:text-slate-500 mx-1" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10"><path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m1 9 4-4-4-4"/></svg><span className="ms-1 font-medium text-slate-500 dark:text-slate-400 md:ms-2">Recursos Humanos</span></div></li>
+                            <li aria-current="page"><div className="flex items-center"><svg className="rtl:rotate-180 w-3 h-3 text-slate-400 dark:text-slate-500 mx-1" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10"><path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m1 9 4-4-4-4"/></svg><span className="ms-1 font-medium text-slate-400 dark:text-slate-500 md:ms-2">Usuários</span></div></li>
                         </ol>
                     </nav>
                 </div>
@@ -221,25 +192,21 @@ const UsuariosPage: React.FC<UsuariosPageProps> = ({ onNavigate }) => {
                 <div className="bg-white dark:bg-slate-800/50 p-4 sm:p-6 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
                         <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Gerenciar Usuários e Permissões</h2>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Adicione, edite ou gerencie permissões em massa.</p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Adicione usuários e atribua suas permissões (roles) no sistema.</p>
                     </div>
                     <div className="flex items-center gap-2 w-full sm:w-auto">
-                        <div className="relative flex-grow">
-                            <SearchIcon className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                            <input type="text" placeholder="Buscar por nome ou matrícula..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm pl-10 p-2 text-sm focus:ring-sky-500 focus:border-sky-500" />
-                        </div>
+                        <div className="relative flex-grow"><SearchIcon className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" /><input type="text" placeholder="Buscar por nome ou matrícula..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm pl-10 p-2 text-sm focus:ring-sky-500 focus:border-sky-500" /></div>
+                        <button onClick={() => setIsGerenciarRolesModalOpen(true)} title="Gerenciar Permissões" className="flex-shrink-0 p-2 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm hover:bg-slate-100 dark:hover:bg-slate-600"><SettingsIcon className="w-5 h-5" /></button>
                         <button onClick={() => setIsInserirModalOpen(true)} className="flex-shrink-0 flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-sky-600 rounded-md shadow-sm hover:bg-sky-700"><PlusIcon className="w-5 h-5" /><span className="hidden sm:inline">Novo Usuário</span></button>
                     </div>
                 </div>
                 
-                {/* Tabela de Usuários */}
+                {/* Tabela */}
                 <div className="bg-white dark:bg-slate-800/50 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700/50 overflow-x-auto">
                     <table className="w-full text-sm text-left text-slate-500 dark:text-slate-400">
                         <thead className="text-xs text-slate-700 uppercase bg-slate-100 dark:bg-slate-700 dark:text-slate-300">
                             <tr>
-                                <th scope="col" className="p-4">
-                                    <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" checked={filteredUsuarios.length > 0 && selectedUserUuids.length === filteredUsuarios.length} onChange={handleSelectAll} />
-                                </th>
+                                <th scope="col" className="p-4"><input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" checked={filteredUsuarios.length > 0 && selectedUserUuids.length === filteredUsuarios.length} onChange={handleSelectAll} /></th>
                                 <th scope="col" className="py-3 px-6">Usuário</th>
                                 <th scope="col" className="py-3 px-6">Permissões (Roles)</th>
                                 <th scope="col" className="py-3 px-6 text-right">Ações</th>
@@ -252,17 +219,12 @@ const UsuariosPage: React.FC<UsuariosPageProps> = ({ onNavigate }) => {
                                 <tr><td colSpan={4} className="text-center py-6 text-red-500"><strong>Falha ao carregar:</strong> {error}</td></tr>
                             ) : filteredUsuarios.length > 0 ? filteredUsuarios.map(user => (
                                 <tr key={user.uuid} className={`border-b dark:border-slate-700 transition-colors ${selectedUserUuids.includes(user.uuid) ? 'bg-sky-50 dark:bg-sky-900/50' : 'hover:bg-slate-50 dark:hover:bg-slate-800/30'}`}>
-                                    <td className="p-4">
-                                        <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" checked={selectedUserUuids.includes(user.uuid)} onChange={() => handleSelectUser(user.uuid)} />
-                                    </td>
-                                    <td className="py-4 px-6">
-                                        <div className="font-medium text-slate-900 dark:text-white">{user.name}</div>
-                                        <div className="font-mono text-xs text-slate-400">{user.id}</div>
-                                    </td>
+                                    <td className="p-4"><input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" checked={selectedUserUuids.includes(user.uuid)} onChange={() => handleSelectUser(user.uuid)} /></td>
+                                    <td className="py-4 px-6"><div className="font-medium text-slate-900 dark:text-white">{user.name}</div><div className="font-mono text-xs text-slate-400">{user.id}</div></td>
                                     <td className="py-4 px-6">
                                         <div className="flex flex-wrap gap-1">
-                                            {user.roles && user.roles.length > 0 ? user.roles.map(role => (
-                                                <span key={role} className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${getRoleBadgeColor(role as Role)}`}>{role}</span>
+                                            {user.roles && user.roles.length > 0 ? user.roles.map(roleName => (
+                                                <span key={roleName} className="text-xs font-medium px-2.5 py-0.5 rounded-full text-white" style={{ backgroundColor: getRoleColor(roleName) }}>{roleName}</span>
                                             )) : (<span className="text-xs text-slate-400 italic">Nenhuma permissão</span>)}
                                         </div>
                                     </td>
@@ -279,10 +241,11 @@ const UsuariosPage: React.FC<UsuariosPageProps> = ({ onNavigate }) => {
                 </div>
             </section>
 
-            <BulkActionsBar selectedCount={selectedUserUuids.length} onClearSelection={() => setSelectedUserUuids([])} onBulkAddRole={(role) => handleBulkAction({ type: 'addRole', role })} onBulkRemoveRole={(role) => handleBulkAction({ type: 'removeRole', role })} />
+            <BulkActionsBar selectedCount={selectedUserUuids.length} roles={allRoles} onClearSelection={() => setSelectedUserUuids([])} onBulkAddRole={(role) => handleBulkAction({ type: 'addRole', role })} onBulkRemoveRole={(role) => handleBulkAction({ type: 'removeRole', role })} />
             
             <InserirUsuarioModal isOpen={isInserirModalOpen} onClose={() => setIsInserirModalOpen(false)} onSave={handleSaveUsuario} />
-            <EditarUsuarioModal isOpen={isEditarModalOpen} onClose={() => setIsEditarModalOpen(false)} onSave={handleUpdateUsuario} user={usuarioParaEditar} />
+            <EditarUsuarioModal isOpen={isEditarModalOpen} onClose={() => setIsEditarModalOpen(false)} onSave={handleUpdateUsuario} user={usuarioParaEditar} availableRoles={allRoles} />
+            <GerenciarRolesModal isOpen={isGerenciarRolesModalOpen} onClose={() => setIsGerenciarRolesModalOpen(false)} roles={allRoles} onSave={handleSaveRole} onUpdate={handleUpdateRole} onDelete={handleDeleteRole} />
             
             <style>{`.animate-fade-in-up { animation: fade-in-up 0.3s ease-out forwards; } @keyframes fade-in-up { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }`}</style>
         </>

@@ -1,56 +1,51 @@
 import React, { useState, useEffect } from 'react';
-import { User, Role, ROLES_DISPONIVEIS } from '../types';
+import { User, Role } from '../types'; // ROLES_DISPONIVEIS foi removido da importação
 
 interface EditarUsuarioModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSave: (user: User) => void;
     user: User | null;
+    // Nova prop para receber a lista de roles disponíveis da API
+    availableRoles: Role[];
 }
 
-const EditarUsuarioModal: React.FC<EditarUsuarioModalProps> = ({ isOpen, onClose, onSave, user }) => {
-    // Estados internos para cada campo editável do formulário
+const EditarUsuarioModal: React.FC<EditarUsuarioModalProps> = ({ isOpen, onClose, onSave, user, availableRoles }) => {
     const [id, setId] = useState<string | number>('');
     const [name, setName] = useState('');
-    const [selectedRoles, setSelectedRoles] = useState<Role[]>([]);
+    // O estado agora armazena os NOMES (strings) das roles selecionadas, para corresponder ao tipo em User
+    const [selectedRoleNames, setSelectedRoleNames] = useState<string[]>([]);
 
-    // Este efeito é executado sempre que um novo usuário é passado para o modal.
-    // Ele preenche os campos do formulário com os dados atuais do usuário.
     useEffect(() => {
         if (user) {
             setId(user.id);
             setName(user.name);
-            setSelectedRoles(user.roles || []);
+            setSelectedRoleNames(user.roles || []);
         }
     }, [user]);
 
-    // Função para lidar com a seleção/desseleção dos checkboxes de permissões
-    const handleRoleChange = (role: Role) => {
-        setSelectedRoles(prev => 
-            prev.includes(role) 
-                ? prev.filter(r => r !== role) // Se já estiver selecionado, remove
-                : [...prev, role]             // Se não, adiciona
+    // A função agora lida com os NOMES (strings) das roles
+    const handleRoleChange = (roleName: string) => {
+        setSelectedRoleNames(prev => 
+            prev.includes(roleName) 
+                ? prev.filter(name => name !== roleName) 
+                : [...prev, roleName]
         );
     };
 
-    // Função chamada ao clicar no botão "Salvar Alterações"
     const handleSave = () => {
         const idAsString = String(id).trim();
-        // Garante que a matrícula e o nome não estão vazios
         if (idAsString && name.trim() && user) {
-            // Cria um novo objeto de usuário com todos os dados atualizados
             const updatedUser: User = { 
                 ...user, 
                 id: idAsString, 
                 name: name.trim(), 
-                roles: selectedRoles 
+                roles: selectedRoleNames // Salva o array de nomes de roles
             };
-            // Envia o objeto atualizado de volta para a página principal
             onSave(updatedUser);
         }
     };
 
-    // Não renderiza nada se o modal não estiver aberto ou se nenhum usuário foi selecionado
     if (!isOpen || !user) return null;
 
     return (
@@ -92,15 +87,16 @@ const EditarUsuarioModal: React.FC<EditarUsuarioModalProps> = ({ isOpen, onClose
                             Permissões (Roles)
                         </label>
                         <div className="space-y-2">
-                            {ROLES_DISPONIVEIS.map(role => (
-                                <label key={role} className="flex items-center gap-2 cursor-pointer">
+                            {/* O .map agora usa a prop 'availableRoles' */}
+                            {availableRoles.map(role => (
+                                <label key={role.uuid} className="flex items-center gap-2 cursor-pointer">
                                     <input
                                         type="checkbox"
-                                        checked={selectedRoles.includes(role)}
-                                        onChange={() => handleRoleChange(role)}
+                                        checked={selectedRoleNames.includes(role.name)}
+                                        onChange={() => handleRoleChange(role.name)}
                                         className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
                                     />
-                                    <span className="text-sm text-slate-700 dark:text-slate-300">{role}</span>
+                                    <span className="text-sm text-slate-700 dark:text-slate-300">{role.name}</span>
                                 </label>
                             ))}
                         </div>

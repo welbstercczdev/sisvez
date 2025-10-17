@@ -1,43 +1,98 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import toast from 'react-hot-toast'; // Importe o toast para as novas mensagens
 import { HomeIcon, PrinterIcon, SaveIcon, ClockHistoryIcon } from '../components/icons/IconComponents';
 import { Equipe, User, FormacaoDiaria, MembroComStatus, MembroStatus, Grupo, OrganizacaoSalva } from '../types';
 import FormationCard from '../components/FormationCard';
 import HistoricoFormacaoModal from '../components/HistoricoFormacaoModal';
 
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyotEdB0INfTNUK9q6MKbHEMQFUzwi5rMYnfZ6tQ7OaQ4ojOa9J3ItXqNsjjEl4XqN0/exec'; // SUBSTITUA PELA SUA URL REAL
+
+// ====================== MODIFICAÇÕES NAS PROPS ======================
 interface FormacaoDiariaPageProps {
     onNavigate: (page: string) => void;
     currentDate: string;
     setCurrentDate: (date: string) => void;
-    dailyStatuses: Map<number, MembroComStatus>;
-    onStatusUpdate: (memberId: number, status: MembroStatus, observacao?: string) => void;
+    // Tipagem da chave do Map e do ID do membro atualizada para 'number | string'
+    dailyStatuses: Map<number | string, MembroComStatus>;
+    onStatusUpdate: (memberId: number | string, status: MembroStatus, observacao?: string) => void;
     equipes: Equipe[];
     dailyGroups: Map<string, Grupo[]>;
     historicoOrganizacoes: OrganizacaoSalva[];
 }
+// =======================================================================
 
 const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, currentDate, setCurrentDate, dailyStatuses, onStatusUpdate, equipes, dailyGroups, historicoOrganizacoes }) => {
     const [formacaoDetails, setFormacaoDetails] = useState<Map<string, { veiculo: string; observacoes: string }>>(new Map());
     const [isHistoricoModalOpen, setIsHistoricoModalOpen] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
 
-    // Initialize/update details map when teams change or date changes
+    // Efeito para buscar formações salvas quando a data muda
     useEffect(() => {
-        setFormacaoDetails(prevDetails => {
-            const newDetails = new Map<string, { veiculo: string; observacoes: string }>();
-            equipes.forEach(equipe => {
-                const existing = prevDetails.get(equipe.id);
-                newDetails.set(equipe.id, {
-                    veiculo: existing?.veiculo || '',
-                    observacoes: existing?.observacoes || ''
-                });
-            });
-            return newDetails;
-        });
-    }, [equipes, currentDate]);
+        // Zera os detalhes ao mudar de data para não carregar dados do dia anterior
+        setFormacaoDetails(new Map());
+
+        const fetchFormacoesDoDia = async () => {
+            setIsLoading(true);
+            try {
+                const url = new URL(GOOGLE_SCRIPT_URL);
+                url.searchParams.append('api', 'formacaoDiaria');
+                url.searchParams.append('date', currentDate);
+
+                const response = await fetch(url.toString());
+                const result = await response.json();
+
+                if (result.success && Array.isArray(result.data) && result.data.length > 0) {
+                    const savedFormations: FormacaoDiaria[] = result.data;
+                    
+                    // Atualiza os detalhes (veículo, observações) com os dados salvos
+                    setFormacaoDetails(prevDetails => {
+                        const newDetails = new Map(prevDetails);
+                        savedFormations.forEach(formacao => {
+                            newDetails.set(formacao.equipeId, {
+                                veiculo: formacao.veiculo,
+                                observacoes: formacao.observacoes
+                            });
+                        });
+                        return newDetails;
+                    });
+
+                    // Cria um conjunto com os UUIDs de todos os membros que estavam presentes na formação salva
+                    const presentMemberUuids = new Set<string>();
+                    savedFormations.forEach(formacao => {
+                        (formacao.membrosPresentes || []).forEach(membro => presentMemberUuids.add(membro.uuid));
+                    });
+
+                    // ====================== LÓGICA CORRIGIDA AQUI ======================
+                    dailyStatuses.forEach((status, memberId) => {
+                        // A variável 'status' JÁ É o objeto MembroComStatus que precisamos.
+                        // Não é necessário procurar novamente no Map.
+                        const isPresent = presentMemberUuids.has(status.uuid);
+
+                        if (isPresent && status.status !== 'Ativo') {
+                            onStatusUpdate(memberId, 'Ativo');
+                        } else if (!isPresent && status.status === 'Ativo') {
+                            // Assume 'Folga' se não estava presente, pode ser ajustado
+                            onStatusUpdate(memberId, 'Folga');
+                        }
+                    });
+                    // =====================================================================
+
+                    toast.success('Formação anterior carregada!');
+                }
+            } catch (err) {
+                toast.error('Não foi possível carregar a formação salva.');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchFormacoesDoDia();
+    }, [currentDate]);
     
     const teamMembersWithStatus = useMemo(() => {
         const map = new Map<string, MembroComStatus[]>();
         equipes.forEach(equipe => {
-            const allMemberIds = new Set([equipe.lider.id, ...equipe.membros.map(m => m.id)]);
+            const allMemberIds = new Set<number | string>([equipe.lider.id, ...equipe.membros.map(m => m.id)]);
             const members: MembroComStatus[] = [];
             allMemberIds.forEach(id => {
                 const status = dailyStatuses.get(id);
@@ -50,7 +105,7 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
         return map;
     }, [equipes, dailyStatuses]);
 
-    const handleMemberPresenceChange = (memberId: number, isPresent: boolean) => {
+    const handleMemberPresenceChange = (memberId: number | string, isPresent: boolean) => {
         const currentStatus = dailyStatuses.get(memberId)?.status;
         if (isPresent && currentStatus !== 'Ativo') {
             onStatusUpdate(memberId, 'Ativo');
@@ -63,10 +118,38 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
         setFormacaoDetails(prev => new Map(prev).set(equipeId, details));
     };
     
-    const handleSaveAll = () => {
-        console.log('Salvando formação para o dia:', currentDate);
-        // In a real app, this would combine `formacaoDetails` with `dailyGroups` and `dailyStatuses` to save.
-        alert(`Formação para ${new Date(currentDate + 'T00:00:00').toLocaleDateString('pt-BR')} salva com sucesso!`);
+    const handleSaveAll = async () => {
+        const loadingToastId = toast.loading('Salvando formação do dia...');
+        const activeEquipes = equipes.filter(e => e.status === 'Ativo');
+        const payload: Omit<FormacaoDiaria, "uuid">[] = activeEquipes.map(equipe => {
+            const details = formacaoDetails.get(equipe.id) || { veiculo: '', observacoes: '' };
+            const allMembersOfTeam = teamMembersWithStatus.get(equipe.id) || [];
+            const membrosPresentes = allMembersOfTeam.filter(membro => membro.status === 'Ativo');
+            return {
+                data: currentDate,
+                equipeId: equipe.id,
+                nomeEquipe: equipe.nome,
+                lider: equipe.lider,
+                membrosPresentes: membrosPresentes,
+                veiculo: details.veiculo,
+                observacoes: details.observacoes
+            };
+        });
+
+        try {
+            const response = await fetch(GOOGLE_SCRIPT_URL, {
+                method: 'POST',
+                redirect: 'follow',
+                body: JSON.stringify({ api: 'formacaoDiaria', payload }),
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+            });
+            const result = await response.json();
+            if (!result.success) throw new Error(result.error);
+            toast.success(result.message, { id: loadingToastId });
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Ocorreu um erro.';
+            toast.error(`Falha ao salvar: ${errorMessage}`, { id: loadingToastId });
+        }
     };
 
     const activeEquipes = equipes.filter(e => e.status === 'Ativo');
@@ -132,25 +215,29 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
                 </div>
                 
                 {/* Formation Cards Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {activeEquipes.map(equipe => {
-                         const details = formacaoDetails.get(equipe.id) || { veiculo: '', observacoes: ''};
-                         const members = teamMembersWithStatus.get(equipe.id) || [];
-                         const groups = dailyGroups.get(equipe.id) || [];
+                {isLoading ? (
+                    <div className="text-center py-12 text-slate-500 dark:text-slate-400">Carregando...</div>
+                ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                        {activeEquipes.map(equipe => {
+                             const details = formacaoDetails.get(equipe.id) || { veiculo: '', observacoes: ''};
+                             const members = teamMembersWithStatus.get(equipe.id) || [];
+                             const groups = dailyGroups.get(equipe.id) || [];
 
-                         return (
-                            <FormationCard 
-                                key={equipe.id}
-                                equipe={equipe}
-                                teamMembersWithStatus={members}
-                                groups={groups}
-                                formationDetails={details}
-                                onMemberPresenceChange={handleMemberPresenceChange}
-                                onDetailsChange={(newDetails) => handleDetailsChange(equipe.id, newDetails)}
-                            />
-                        );
-                    })}
-                </div>
+                             return (
+                                <FormationCard 
+                                    key={equipe.id}
+                                    equipe={equipe}
+                                    teamMembersWithStatus={members}
+                                    groups={groups}
+                                    formationDetails={details}
+                                    onMemberPresenceChange={handleMemberPresenceChange}
+                                    onDetailsChange={(newDetails) => handleDetailsChange(equipe.id, newDetails)}
+                                />
+                            );
+                        })}
+                    </div>
+                )}
             </section>
             
             <HistoricoFormacaoModal 

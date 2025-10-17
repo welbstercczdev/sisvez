@@ -1,16 +1,21 @@
 import React from 'react';
 
 // ====================== MODIFICAÇÕES APLICADAS AQUI ======================
-export const ROLES_DISPONIVEIS = [
-  'Admin',
-  'Supervisor',
-  'Líder', // <-- ADICIONADO
-  'ACE',   // <-- RENOMEADO DE 'Agente de Campo'
-  'Analista',
-  'Convidado'
-] as const;
 
-export type Role = typeof ROLES_DISPONIVEIS[number];
+// 1. As constantes estáticas de roles foram REMOVIDAS.
+// A lista de permissões agora virá da sua API.
+// export const ROLES_DISPONIVEIS = [...] as const;
+// export type Role = typeof ROLES_DISPONIVEIS[number];
+
+// 2. Foi criada uma NOVA INTERFACE para representar uma Role como um objeto do banco de dados.
+export interface Role {
+  uuid: string;
+  name: string;
+  description: string;
+  color: string;
+}
+
+// =======================================================================
 
 export interface NavItem {
   id: string;
@@ -73,7 +78,9 @@ export interface User {
   uuid: string;
   id: number | string;
   name: string;
-  roles: Role[];
+  // 3. A propriedade 'roles' agora é um array de STRINGS.
+  // O backend salva e envia apenas os nomes das roles associadas ao usuário.
+  roles: string[];
 }
 
 export type HistoricoAcao = 'criacao' | 'edicao_nome' | 'troca_lider' | 'add_membro' | 'rem_membro' | 'mudanca_status';

@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { HomeIcon, PlusIcon, UsersIcon, PersonIcon, XIcon, SaveIcon, ChevronDownIcon, ClockHistoryIcon } from '../components/icons/IconComponents';
+import toast from 'react-hot-toast'; // Importar toast para feedback
+import { HomeIcon, PlusIcon, UsersIcon, XIcon, SaveIcon, ChevronDownIcon, ClockHistoryIcon } from '../components/icons/IconComponents';
 import { Equipe, User, Grupo, MembroComFuncao, Funcao, MembroComStatus, MembroStatus, OrganizacaoSalva } from '../types';
 import HistoricoOrganizacaoModal from '../components/HistoricoOrganizacaoModal';
+
+const GOOGLE_SCRIPT_URL = ''; // SUBSTITUA PELA SUA URL REA
 
 const FUNCOES: Funcao[] = ['Aplicador', 'Anotador', 'Facilitador', 'Motorista', 'Operador'];
 
