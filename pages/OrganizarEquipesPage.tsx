@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useRef, useMemo, useId } from 'react'; // 1. Adicionar useId
+import React, { useState, useEffect, useRef, useMemo, useId } from 'react';
 import toast from 'react-hot-toast';
-import { HomeIcon, PlusIcon, UsersIcon, XIcon, SaveIcon, ChevronDownIcon, ClockHistoryIcon, SpinnerIcon,CheckIcon} from '../components/icons/IconComponents';
+import { HomeIcon, PlusIcon, UsersIcon, XIcon, SaveIcon, ChevronDownIcon, ClockHistoryIcon, SpinnerIcon, CheckIcon } from '../components/icons/IconComponents';
 import { Equipe, User, Grupo, MembroComFuncao, Funcao, MembroComStatus, MembroStatus, OrganizacaoSalva } from '../types';
 import HistoricoOrganizacaoModal from '../components/HistoricoOrganizacaoModal';
+// Importamos o StatusSelector, que agora vive em seu próprio arquivo.
+import StatusSelector from '../components/StatusSelector';
 
-// SUBSTITUA PELA SUA URL REAL
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyotEdB0INfTNUK9q6MKbHEMQFUzwi5rMYnfZ6tQ7OaQ4ojOa9J3ItXqNsjjEl4XqN0/exec'; 
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyotEdB0INfTNUK9q6MKbHEMQFUzwi5rMYnfZ6tQ7OaQ4ojOa9J3ItXqNsjjEl4XqN0/exec'; // SUBSTITUA PELA SUA URL REAL
 
 const FUNCOES: Funcao[] = ['Aplicador', 'Anotador', 'Facilitador', 'Motorista', 'Operador'];
 
@@ -15,17 +16,6 @@ const FUNCAO_COLORS: Record<Funcao, { bg: string; text: string; dot: string; }> 
     'Facilitador': { bg: 'bg-emerald-100 dark:bg-emerald-900/70', text: 'text-emerald-800 dark:text-emerald-200', dot: 'bg-emerald-500' },
     'Motorista': { bg: 'bg-violet-100 dark:bg-violet-900/70', text: 'text-violet-800 dark:text-violet-200', dot: 'bg-violet-500' },
     'Operador': { bg: 'bg-fuchsia-100 dark:bg-fuchsia-900/70', text: 'text-fuchsia-800 dark:text-fuchsia-200', dot: 'bg-fuchsia-500' },
-};
-
-const STATUSES: MembroStatus[] = ['Ativo', 'Folga', 'Férias', 'Curso', 'GLM', 'Observação'];
-
-const STATUS_COLORS: Record<MembroStatus, { bg: string; text: string; dot: string; }> = {
-    'Ativo': { bg: 'bg-green-100 dark:bg-green-900/70', text: 'text-green-800 dark:text-green-200', dot: 'bg-green-500' },
-    'Folga': { bg: 'bg-sky-100 dark:bg-sky-900/70', text: 'text-sky-800 dark:text-sky-200', dot: 'bg-sky-500' },
-    'Férias': { bg: 'bg-orange-100 dark:bg-orange-900/70', text: 'text-orange-800 dark:text-orange-200', dot: 'bg-orange-500' },
-    'Curso': { bg: 'bg-violet-100 dark:bg-violet-900/70', text: 'text-violet-800 dark:text-violet-200', dot: 'bg-violet-500' },
-    'GLM': { bg: 'bg-slate-200 dark:bg-slate-700', text: 'text-slate-800 dark:text-slate-200', dot: 'bg-slate-500' },
-    'Observação': { bg: 'bg-yellow-100 dark:bg-yellow-900/70', text: 'text-yellow-800 dark:text-yellow-200', dot: 'bg-yellow-500' },
 };
 
 interface OrganizarEquipesPageProps {
@@ -57,14 +47,13 @@ const updateGroupName = (group: Grupo, allGroups: Grupo[]): Grupo => {
     return { ...group, nome: `${newPrefix} ${nextNumber}` };
 };
 
-// ====================== CÓDIGO CORRIGIDO ======================
 const MultiRoleSelector: React.FC<{
     selectedFuncoes: Funcao[];
     onSelectionChange: (funcoes: Funcao[]) => void;
 }> = ({ selectedFuncoes, onSelectionChange }) => {
     const [isOpen, setIsOpen] = useState(false);
     const wrapperRef = useRef<HTMLDivElement>(null);
-    const instanceId = useId(); // 2. Gerar um ID único e estável para esta instância do componente
+    const instanceId = useId();
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -107,14 +96,12 @@ const MultiRoleSelector: React.FC<{
                             <li key={funcao} className="flex items-center px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-600">
                                 <input
                                     type="checkbox"
-                                    // 3. Usar o ID estável gerado pelo useId
                                     id={`${instanceId}-${funcao}`}
                                     checked={selectedFuncoes.includes(funcao)}
                                     onChange={() => handleToggle(funcao)}
                                     className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
                                 />
                                 <label
-                                    // 4. Associar o label ao ID correto
                                     htmlFor={`${instanceId}-${funcao}`}
                                     className="ml-3 flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200 cursor-pointer"
                                 >
@@ -129,91 +116,6 @@ const MultiRoleSelector: React.FC<{
         </div>
     );
 };
-// =============================================================
-
-const StatusSelector: React.FC<{
-    member: MembroComStatus;
-    onStatusChange: (status: MembroStatus, observacao?: string) => void;
-    disabled?: boolean;
-}> = ({ member, onStatusChange, disabled = false }) => {
-    const [isMenuOpen, setIsMenuOpen] = useState(false);
-    const [isEditingObs, setIsEditingObs] = useState(false);
-    const [obsText, setObsText] = useState('');
-    const buttonRef = useRef<HTMLButtonElement>(null);
-    const menuRef = useRef<HTMLDivElement>(null);
-    const [menuPosition, setMenuPosition] = useState<{ top: number, left: number } | null>(null);
-
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (buttonRef.current && !buttonRef.current.contains(event.target as Node) && menuRef.current && !menuRef.current.contains(event.target as Node)) {
-                setIsMenuOpen(false);
-                setIsEditingObs(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    const handleMenuToggle = () => {
-        if (disabled) return;
-        if (!isMenuOpen) {
-            if (buttonRef.current) {
-                const rect = buttonRef.current.getBoundingClientRect();
-                let top = rect.bottom + 4;
-                let left = rect.left;
-                const menuHeight = 250; 
-                const menuWidth = 224;
-                if (top + menuHeight > window.innerHeight) top = rect.top - menuHeight - 4;
-                if (left + menuWidth > window.innerWidth) left = window.innerWidth - menuWidth - 8;
-                setMenuPosition({ top, left });
-            }
-        }
-        setIsMenuOpen(!isMenuOpen);
-    };
-
-    const handleSelect = (status: MembroStatus) => {
-        if (status === 'Observação') {
-            setObsText(member.observacao || '');
-            setIsEditingObs(true);
-        } else {
-            onStatusChange(status);
-            setIsMenuOpen(false);
-        }
-    };
-
-    const handleSaveObs = () => {
-        onStatusChange('Observação', obsText);
-        setIsEditingObs(false);
-        setIsMenuOpen(false);
-    };
-
-    const colors = STATUS_COLORS[member.status];
-    const displayText = member.status === 'Observação' ? (member.observacao || 'Observação') : member.status;
-
-    return (
-        <>
-            <button ref={buttonRef} type="button" title={disabled ? 'Funcionário em Férias' : displayText} onClick={handleMenuToggle} className={`w-6 h-6 flex-shrink-0 flex items-center justify-center rounded-full border-2 border-white dark:border-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 dark:focus:ring-offset-slate-900 ${disabled ? 'cursor-not-allowed' : 'transition-transform hover:scale-110'}`} disabled={disabled}>
-                <span className={`w-3.5 h-3.5 rounded-full ${colors.dot}`}></span>
-            </button>
-            {isMenuOpen && !disabled && menuPosition && (
-                <div ref={menuRef} className="fixed z-50 w-56 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md shadow-xl" style={{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }}>
-                    {!isEditingObs ? (
-                        <ul>{STATUSES.map(status => ( <li key={status}><button onClick={() => handleSelect(status)} className="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600"><span className={`w-3 h-3 rounded-full ${STATUS_COLORS[status].dot}`}></span>{status}</button></li> ))}</ul>
-                    ) : (
-                        <div className="p-3 space-y-2">
-                            <label htmlFor="obs-input" className="text-sm font-medium text-slate-700 dark:text-slate-300">Observação</label>
-                            <input id="obs-input" type="text" value={obsText} onChange={e => setObsText(e.target.value)} className="w-full bg-white dark:bg-slate-600 border border-slate-300 dark:border-slate-500 rounded-md p-2 text-sm focus:ring-sky-500 focus:border-sky-500" autoFocus onKeyDown={(e) => { if (e.key === 'Enter') handleSaveObs(); }} />
-                            <div className="flex justify-end gap-2">
-                                <button onClick={() => { setIsEditingObs(false); setIsMenuOpen(false); }} className="px-3 py-1 text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-600 rounded-md hover:bg-slate-200 dark:hover:bg-slate-500">Cancelar</button>
-                                <button onClick={handleSaveObs} className="px-3 py-1 text-xs font-medium text-white bg-sky-600 rounded-md hover:bg-sky-700">Salvar</button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
-        </>
-    );
-};
 const OrganizarEquipesPage: React.FC<OrganizarEquipesPageProps> = ({ onNavigate, currentDate, setCurrentDate, dailyStatuses, onStatusUpdate, equipes, historicoOrganizacoes, onHistoricoUpdate }) => {
     const [selectedTeamId, setSelectedTeamId] = useState<string>('');
     const [isHistoricoModalOpen, setIsHistoricoModalOpen] = useState(false);
@@ -225,7 +127,10 @@ const OrganizarEquipesPage: React.FC<OrganizarEquipesPageProps> = ({ onNavigate,
         if (!team) return [];
         const allTeamMemberIds = new Set<number | string>([team.lider.id, ...team.membros.map(m => m.id)]);
         const members: MembroComStatus[] = [];
-        allTeamMemberIds.forEach(id => { const status = dailyStatuses.get(id); if (status) members.push(status); });
+        allTeamMemberIds.forEach(id => { 
+            const status = dailyStatuses.get(id); 
+            if (status) members.push(status); 
+        });
         return members.sort((a,b) => a.name.localeCompare(b.name));
     }, [selectedTeamId, dailyStatuses, equipes]);
     
@@ -243,9 +148,15 @@ const OrganizarEquipesPage: React.FC<OrganizarEquipesPageProps> = ({ onNavigate,
     useEffect(() => {
         if (!currentDate || !selectedTeamId || !historicoOrganizacoes) return;
         const dateAsDDMMYYYY = new Date(currentDate + 'T00:00:00').toLocaleDateString('pt-BR', {timeZone: 'UTC'});
-        const latestOrgForTeamAndDate = historicoOrganizacoes.filter(org => (org.data === currentDate || org.data === dateAsDDMMYYYY) && org.equipe.id === selectedTeamId).sort((a, b) => new Date(b.dataSalvamento).getTime() - new Date(a.dataSalvamento).getTime())[0];
+        const latestOrgForTeamAndDate = historicoOrganizacoes
+            .filter(org => (org.data === currentDate || org.data === dateAsDDMMYYYY) && org.equipe.id === selectedTeamId)
+            .sort((a, b) => new Date(b.dataSalvamento).getTime() - new Date(a.dataSalvamento).getTime())[0];
+        
         setGroups(latestOrgForTeamAndDate ? latestOrgForTeamAndDate.grupos : []);
-        if (latestOrgForTeamAndDate) toast.success(`Organização anterior para ${latestOrgForTeamAndDate.equipe.nome} carregada.`);
+        
+        if (latestOrgForTeamAndDate) {
+            toast.success(`Organização anterior para ${latestOrgForTeamAndDate.equipe.nome} carregada.`);
+        }
     }, [currentDate, selectedTeamId, historicoOrganizacoes]);
 
     const handleSaveOrganization = async () => {
@@ -258,16 +169,38 @@ const OrganizarEquipesPage: React.FC<OrganizarEquipesPageProps> = ({ onNavigate,
             return;
         }
         if (groups.length === 0 && availableMembers.filter(m => m.status === 'Ativo').length > 0) {
-            const confirmed = await new Promise((resolve) => { toast((t) => (<div><p>Nenhum grupo formado. Salvar mesmo assim?</p><div className="flex gap-2"><button onClick={() => { resolve(true); toast.dismiss(t.id); }}>Sim</button><button onClick={() => { resolve(false); toast.dismiss(t.id); }}>Não</button></div></div>)); });
+            const confirmed = await new Promise((resolve) => { 
+                toast((t) => (
+                    <div>
+                        <p>Nenhum grupo foi formado. Salvar mesmo assim?</p>
+                        <div className="flex gap-2">
+                            <button onClick={() => { resolve(true); toast.dismiss(t.id); }}>Sim</button>
+                            <button onClick={() => { resolve(false); toast.dismiss(t.id); }}>Não</button>
+                        </div>
+                    </div>
+                )); 
+            });
             if (!confirmed) {
                 setSaveState('idle');
                 return;
             }
         }
         const currentTeamMembersStatus = teamMembers.map(({ id, uuid, name, roles, status, observacao }) => ({ id, uuid, name, roles, status, observacao }));
-        const payload: Omit<OrganizacaoSalva, 'id'> = { data: currentDate, dataSalvamento: new Date().toISOString(), usuarioSalvo: { uuid: 'user-uuid-placeholder', id: 99, name: 'WELBSTER', roles: ['Admin'] }, equipe: team, grupos: groups, membrosStatus: currentTeamMembersStatus };
+        const payload: Omit<OrganizacaoSalva, 'id'> = { 
+            data: currentDate, 
+            dataSalvamento: new Date().toISOString(), 
+            usuarioSalvo: { uuid: 'user-uuid-placeholder', id: 99, name: 'WELBSTER', roles: ['Admin'] }, 
+            equipe: team, 
+            grupos: groups, 
+            membrosStatus: currentTeamMembersStatus 
+        };
         try {
-            const response = await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', redirect: 'follow', body: JSON.stringify({ api: 'organizacaoEquipes', payload }), headers: { "Content-Type": "text/plain;charset=utf-8" } });
+            const response = await fetch(GOOGLE_SCRIPT_URL, { 
+                method: 'POST', 
+                redirect: 'follow', 
+                body: JSON.stringify({ api: 'organizacaoEquipes', payload }), 
+                headers: { "Content-Type": "text/plain;charset=utf-8" } 
+            });
             const result = await response.json();
             if (!result.success) throw new Error(result.error);
             onHistoricoUpdate(prev => [result.newRecord, ...prev].sort((a,b) => new Date(b.dataSalvamento).getTime() - new Date(a.dataSalvamento).getTime()));
@@ -290,7 +223,9 @@ const OrganizarEquipesPage: React.FC<OrganizarEquipesPageProps> = ({ onNavigate,
         setGroups(prevGroups => [...prevGroups, newGroup]);
     };
     
-    const handleRemoveGroup = (groupId: string) => setGroups(prevGroups => prevGroups.filter(g => g.id !== groupId));
+    const handleRemoveGroup = (groupId: string) => {
+        setGroups(prevGroups => prevGroups.filter(g => g.id !== groupId));
+    };
     
     const handleAssignMember = (groupId: string, memberId: number | string) => {
         const member = teamMembers.find(m => m.id === memberId);
@@ -321,11 +256,15 @@ const OrganizarEquipesPage: React.FC<OrganizarEquipesPageProps> = ({ onNavigate,
         setGroups(intermediateGroups.map(g => g.id === groupId ? finalGroup : g));
     };
 
-    const handleGroupNameChange = (groupId: string, newName: string) => setGroups(prevGroups => prevGroups.map(g => g.id === groupId ? { ...g, nome: newName } : g));
+    const handleGroupNameChange = (groupId: string, newName: string) => {
+        setGroups(prevGroups => prevGroups.map(g => g.id === groupId ? { ...g, nome: newName } : g));
+    };
     
     const handleMemberFunctionsChange = (groupId: string, memberId: number | string, funcoes: Funcao[]) => {
         const newGroups = groups.map(group => {
-            if (group.id === groupId) return { ...group, membros: group.membros.map(member => member.id === memberId ? { ...member, funcoes: funcoes.sort() } : member) };
+            if (group.id === groupId) {
+                return { ...group, membros: group.membros.map(member => member.id === memberId ? { ...member, funcoes: funcoes.sort() } : member) };
+            }
             return group;
         });
         setGroups(newGroups);
@@ -336,12 +275,28 @@ const OrganizarEquipesPage: React.FC<OrganizarEquipesPageProps> = ({ onNavigate,
         <>
             <section className="space-y-6 pb-8">
                 {/* Breadcrumbs */}
-                <div>
-                  <nav className="flex" aria-label="Breadcrumb"><ol className="inline-flex items-center space-x-1 md:space-x-2 rtl:space-x-reverse text-sm">
-                        <li className="inline-flex items-center"><button onClick={() => onNavigate('dashboard')} className="inline-flex items-center font-medium text-slate-500 dark:text-slate-400 hover:text-sky-600 dark:hover:text-white transition-colors duration-200"><HomeIcon className="w-4 h-4 me-2.5" /></button></li>
-                        <li><div className="flex items-center"><svg className="rtl:rotate-180 w-3 h-3 text-slate-400 dark:text-slate-500 mx-1" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10"><path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m1 9 4-4-4-4"/></svg><span className="ms-1 font-medium text-slate-500 dark:text-slate-400 md:ms-2">Recursos Humanos</span></div></li>
-                        <li aria-current="page"><div className="flex items-center"><svg className="rtl:rotate-180 w-3 h-3 text-slate-400 dark:text-slate-500 mx-1" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10"><path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m1 9 4-4-4-4"/></svg><span className="ms-1 font-medium text-slate-400 dark:text-slate-500 md:ms-2">Organizar Equipe</span></div></li>
-                    </ol></nav>
+                 <div>
+                  <nav className="flex" aria-label="Breadcrumb">
+                    <ol className="inline-flex items-center space-x-1 md:space-x-2 rtl:space-x-reverse text-sm">
+                        <li className="inline-flex items-center">
+                            <button onClick={() => onNavigate('dashboard')} className="inline-flex items-center font-medium text-slate-500 dark:text-slate-400 hover:text-sky-600 dark:hover:text-white transition-colors duration-200">
+                                <HomeIcon className="w-4 h-4 me-2.5" />
+                            </button>
+                        </li>
+                        <li>
+                            <div className="flex items-center">
+                                <svg className="rtl:rotate-180 w-3 h-3 text-slate-400 dark:text-slate-500 mx-1" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10"><path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m1 9 4-4-4-4"/></svg>
+                                <span className="ms-1 font-medium text-slate-500 dark:text-slate-400 md:ms-2">Recursos Humanos</span>
+                            </div>
+                        </li>
+                        <li aria-current="page">
+                            <div className="flex items-center">
+                                <svg className="rtl:rotate-180 w-3 h-3 text-slate-400 dark:text-slate-500 mx-1" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10"><path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m1 9 4-4-4-4"/></svg>
+                                <span className="ms-1 font-medium text-slate-400 dark:text-slate-500 md:ms-2">Organizar Equipe</span>
+                            </div>
+                        </li>
+                    </ol>
+                  </nav>
                 </div>
                 {/* Header and Actions */}
                 <div className="bg-white dark:bg-slate-800/50 p-4 sm:p-6 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -376,6 +331,7 @@ const OrganizarEquipesPage: React.FC<OrganizarEquipesPageProps> = ({ onNavigate,
                             )) : <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">Nenhum membro na equipe.</p>}
                         </div>
                     </div>
+
                     <div className="lg:col-span-2 space-y-4">
                         <div className="flex justify-between items-center">
                             <h3 className="font-semibold text-slate-800 dark:text-slate-200">Grupos Formados ({groups.length})</h3>
@@ -391,16 +347,19 @@ const OrganizarEquipesPage: React.FC<OrganizarEquipesPageProps> = ({ onNavigate,
     );
 };
 
+
 interface GrupoCardProps { group: Grupo; onNameChange: (groupId: string, newName: string) => void; onAddMember: (groupId: string, memberId: number | string) => void; onRemoveMember: (groupId: string, memberId: number | string) => void; onMemberFunctionsChange: (groupId: string, memberId: number | string, funcoes: Funcao[]) => void; onDeleteGroup: (groupId: string) => void; availableMembersForDropdown: User[]; }
 
 const GrupoCard: React.FC<GrupoCardProps> = ({ group, onNameChange, onAddMember, onRemoveMember, onMemberFunctionsChange, onDeleteGroup, availableMembersForDropdown }) => {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+
      useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => { if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) setIsDropdownOpen(false); };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
     return (
         <div className="bg-white dark:bg-slate-800/50 p-4 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700/50">
             <div className="flex justify-between items-center mb-3">

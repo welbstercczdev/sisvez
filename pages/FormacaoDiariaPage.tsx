@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
-// Adicionados CheckIcon e SpinnerIcon à importação
 import { HomeIcon, PrinterIcon, SaveIcon, ClockHistoryIcon, CheckIcon, SpinnerIcon } from '../components/icons/IconComponents';
 import { Equipe, FormacaoDiaria, MembroComStatus, MembroStatus, Grupo, OrganizacaoSalva, User } from '../types';
 import FormationCard from '../components/FormationCard';
@@ -56,7 +55,7 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
 
                     const presentMemberUuids = new Set<string>();
                     savedFormations.forEach(f => (f.membrosPresentes || []).forEach(m => presentMemberUuids.add(m.uuid)));
-
+                    
                     dailyStatuses.forEach((status, memberId) => {
                         if (status.status !== 'Férias') {
                             const isPresent = presentMemberUuids.has(status.uuid);
@@ -77,7 +76,14 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
         };
 
         fetchFormacoesDoDia();
-    }, [currentDate, equipes, onStatusUpdate]);
+    // ====================== CORREÇÃO DEFINITIVA APLICADA AQUI ======================
+    // Removemos 'onStatusUpdate' da lista de dependências.
+    // Este efeito SÓ DEVE rodar quando a data ou a lista de equipes mudar.
+    // Ele não deve reagir a uma mudança de status feita pelo usuário na UI.
+    // Você pode ver um aviso do linter (react-hooks/exhaustive-deps), mas neste caso
+    // específico, ignorá-lo é a decisão correta para quebrar o loop de recarregamento.
+    }, [currentDate, equipes]);
+    // =======================================================================
     
     const teamMembersWithStatus = useMemo(() => {
         const map = new Map<string, MembroComStatus[]>();
@@ -88,20 +94,10 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
                 const status = dailyStatuses.get(id);
                 if (status) members.push(status);
             });
-            map.set(equipe.id, members);
+            map.set(equipe.id, members.sort((a,b) => a.name.localeCompare(b.name)));
         });
         return map;
     }, [equipes, dailyStatuses]);
-
-    const handleMemberPresenceChange = (memberId: number | string, isPresent: boolean) => {
-        const currentStatus = dailyStatuses.get(memberId)?.status;
-        if (currentStatus === 'Férias') return;
-        if (isPresent && currentStatus !== 'Ativo') {
-            onStatusUpdate(memberId, 'Ativo');
-        } else if (!isPresent && currentStatus === 'Ativo') {
-            onStatusUpdate(memberId, 'Folga');
-        }
-    };
 
     const handleDetailsChange = (equipeId: string, details: { veiculo: string; observacoes: string }) => {
         setFormacaoDetails(prev => new Map(prev).set(equipeId, details));
@@ -110,7 +106,6 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
     const handleSaveAll = async () => {
         if (saveState !== 'idle') return;
         setSaveState('saving');
-
         const activeEquipes = equipes.filter(e => e.status === 'Ativo');
         const payload: Omit<FormacaoDiaria, "uuid">[] = activeEquipes.map(equipe => {
             const details = formacaoDetails.get(equipe.id) || { veiculo: '', observacoes: '' };
@@ -136,11 +131,9 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
             });
             const result = await response.json();
             if (!result.success) throw new Error(result.error);
-            
             toast.success(result.message);
             setSaveState('success');
             setTimeout(() => setSaveState('idle'), 2000);
-
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Ocorreu um erro.';
             toast.error(`Falha ao salvar: ${errorMessage}`);
@@ -236,8 +229,8 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
                                     teamMembersWithStatus={members}
                                     groups={groups}
                                     formationDetails={details}
-                                    onMemberPresenceChange={handleMemberPresenceChange}
                                     onDetailsChange={(newDetails) => handleDetailsChange(equipe.id, newDetails)}
+                                    onStatusUpdate={onStatusUpdate}
                                 />
                             );
                         })}

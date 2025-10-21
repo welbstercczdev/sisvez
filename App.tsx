@@ -1,4 +1,4 @@
-import React, {useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
@@ -29,10 +29,8 @@ import FeriasPage from './pages/FeriasPage';
 import UsuariosPage from './pages/UsuariosPage';
 import { Demanda, Atividade, MembroComStatus, MembroStatus, User, Equipe, Grupo, Ferias, OrganizacaoSalva, Role } from './types';
 
-// SUBSTITUA PELA SUA URL REAL
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyotEdB0INfTNUK9q6MKbHEMQFUzwi5rMYnfZ6tQ7OaQ4ojOa9J3ItXqNsjjEl4XqN0/exec'; 
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyotEdB0INfTNUK9q6MKbHEMQFUzwi5rMYnfZ6tQ7OaQ4ojOa9J3ItXqNsjjEl4XqN0/exec'; // SUBSTITUA PELA SUA URL REAL
 
-// DADOS ESTÁTICOS QUE AINDA SERÃO MIGRADOS (EX: FÉRIAS)
 const getTodayPlusDays = (days: number): string => {
     const date = new Date();
     date.setDate(date.getDate() + days);
@@ -82,26 +80,14 @@ const App: React.FC = () => {
   const fetchData = async () => {
     if (!isLoadingData) toast.loading('Atualizando dados...', { id: 'refetching-data' });
     else setIsLoadingData(true);
-    
     try {
-      const [usersRes, equipesRes, orgsRes] = await Promise.all([
-        fetch(`${GOOGLE_SCRIPT_URL}?api=usuarios`),
-        fetch(`${GOOGLE_SCRIPT_URL}?api=equipes`),
-        fetch(`${GOOGLE_SCRIPT_URL}?api=organizacaoEquipes`)
-      ]);
+      const [usersRes, equipesRes, orgsRes] = await Promise.all([ fetch(`${GOOGLE_SCRIPT_URL}?api=usuarios`), fetch(`${GOOGLE_SCRIPT_URL}?api=equipes`), fetch(`${GOOGLE_SCRIPT_URL}?api=organizacaoEquipes`) ]);
       const usersResult = await usersRes.json();
       const equipesResult = await equipesRes.json();
       const orgsResult = await orgsRes.json();
-
-      if (usersResult.success) setUsuarios(usersResult.data || []);
-      else throw new Error(usersResult.error || 'Falha ao buscar usuários.');
-
-      if (equipesResult.success) setEquipes(equipesResult.data || []);
-      else throw new Error(equipesResult.error || 'Falha ao buscar equipes.');
-
-      if (orgsResult.success) setHistoricoOrganizacoes(orgsResult.data || []);
-      else throw new Error(orgsResult.error || 'Falha ao buscar histórico de organizações.');
-      
+      if (usersResult.success) setUsuarios(usersResult.data || []); else throw new Error(usersResult.error || 'Falha ao buscar usuários.');
+      if (equipesResult.success) setEquipes(equipesResult.data || []); else throw new Error(equipesResult.error || 'Falha ao buscar equipes.');
+      if (orgsResult.success) setHistoricoOrganizacoes(orgsResult.data || []); else throw new Error(orgsResult.error || 'Falha ao buscar histórico.');
       if (!isLoadingData) toast.success('Dados atualizados!', { id: 'refetching-data' });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar dados essenciais.';
@@ -111,9 +97,7 @@ const App: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
   useEffect(() => {
     const newStatuses = new Map<number | string, MembroComStatus>();
@@ -125,11 +109,11 @@ const App: React.FC = () => {
     setDailyStatuses(newStatuses);
   }, [currentDate, feriasList, usuarios]);
 
-  const updateDailyGroups = (teamId: string, newGroups: Grupo[]) => {
+  const updateDailyGroups = useCallback((teamId: string, newGroups: Grupo[]) => {
       setDailyGroups(prev => new Map(prev).set(teamId, newGroups));
-  };
+  }, []);
 
-  const updateMemberStatus = (memberId: number | string, status: MembroStatus, observacao?: string) => {
+  const updateMemberStatus = useCallback((memberId: number | string, status: MembroStatus, observacao?: string) => {
     const currentMemberStatus = dailyStatuses.get(memberId);
     if (currentMemberStatus?.status === 'Férias' && status !== 'Férias') {
         toast.error('Não é possível alterar o status de um funcionário que está de férias.');
@@ -155,7 +139,7 @@ const App: React.FC = () => {
             return mapWasChanged ? newGroupsMap : prevGroupsMap;
         });
     }
-  };
+  }, [dailyStatuses, usuarios]);
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
@@ -230,8 +214,6 @@ const App: React.FC = () => {
                     dailyStatuses={dailyStatuses} 
                     onStatusUpdate={updateMemberStatus}
                     equipes={equipes}
-                    dailyGroups={dailyGroups}
-                    onGroupsUpdate={updateDailyGroups}
                     historicoOrganizacoes={historicoOrganizacoes}
                     onHistoricoUpdate={setHistoricoOrganizacoes}
                 />;
@@ -242,7 +224,7 @@ const App: React.FC = () => {
       case 'demandas_lider': return <DemandasLiderPage onNavigate={handleNavigate} />;
       case 'view_demanda':
         const demandTeam = equipes.find(e => e.lider.id === selectedDemanda?.responsavel?.id);
-        const latestSavedOrganizationForDay = historicoOrganizacoes.filter(org => org.equipe.id === demandTeam?.id && org.data === selectedDemanda?.prazo).sort((a, b) => new Date(b.dataSalvamento).getTime() - new Date(a.dataSalvamento).getTime())[0];
+        const latestSavedOrganizationForDay = historicoOrganizacoes.filter(org => org.equipe.id === demandTeam?.id && (org.data === selectedDemanda?.prazo || new Date(selectedDemanda!.prazo + 'T00:00:00').toLocaleDateString('pt-BR') === org.data)).sort((a, b) => new Date(b.dataSalvamento).getTime() - new Date(a.dataSalvamento).getTime())[0];
         return <ViewDemandaPage onNavigate={handleNavigate} demanda={selectedDemanda} gruposDoDia={latestSavedOrganizationForDay?.grupos || null} />;
       
       case 'dashboard':
