@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
-import { HomeIcon, PrinterIcon, SaveIcon, ClockHistoryIcon } from '../components/icons/IconComponents';
+// Adicionados CheckIcon e SpinnerIcon à importação
+import { HomeIcon, PrinterIcon, SaveIcon, ClockHistoryIcon, CheckIcon, SpinnerIcon } from '../components/icons/IconComponents';
 import { Equipe, FormacaoDiaria, MembroComStatus, MembroStatus, Grupo, OrganizacaoSalva, User } from '../types';
 import FormationCard from '../components/FormationCard';
 import HistoricoFormacaoModal from '../components/HistoricoFormacaoModal';
@@ -22,7 +23,7 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
     const [formacaoDetails, setFormacaoDetails] = useState<Map<string, { veiculo: string; observacoes: string }>>(new Map());
     const [isHistoricoModalOpen, setIsHistoricoModalOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
-    const [isSaving, setIsSaving] = useState(false);
+    const [saveState, setSaveState] = useState<'idle' | 'saving' | 'success'>('idle');
 
     useEffect(() => {
         const newDetails = new Map<string, { veiculo: string; observacoes: string }>();
@@ -76,7 +77,7 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
         };
 
         fetchFormacoesDoDia();
-    }, [currentDate, equipes]); // Dependência `onStatusUpdate` removida para evitar loops
+    }, [currentDate, equipes, onStatusUpdate]);
     
     const teamMembersWithStatus = useMemo(() => {
         const map = new Map<string, MembroComStatus[]>();
@@ -107,9 +108,9 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
     };
     
     const handleSaveAll = async () => {
-        if (isSaving) return;
-        setIsSaving(true);
-        const loadingToastId = toast.loading('Salvando formação do dia...');
+        if (saveState !== 'idle') return;
+        setSaveState('saving');
+
         const activeEquipes = equipes.filter(e => e.status === 'Ativo');
         const payload: Omit<FormacaoDiaria, "uuid">[] = activeEquipes.map(equipe => {
             const details = formacaoDetails.get(equipe.id) || { veiculo: '', observacoes: '' };
@@ -135,12 +136,15 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
             });
             const result = await response.json();
             if (!result.success) throw new Error(result.error);
-            toast.success(result.message, { id: loadingToastId });
+            
+            toast.success(result.message);
+            setSaveState('success');
+            setTimeout(() => setSaveState('idle'), 2000);
+
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Ocorreu um erro.';
-            toast.error(`Falha ao salvar: ${errorMessage}`, { id: loadingToastId });
-        } finally {
-            setIsSaving(false);
+            toast.error(`Falha ao salvar: ${errorMessage}`);
+            setSaveState('idle');
         }
     };
 
@@ -196,11 +200,17 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
                         </button>
                          <button 
                             onClick={handleSaveAll} 
-                            disabled={isSaving}
-                            className="flex items-center justify-center gap-2 w-auto px-4 py-2 text-sm font-medium text-white bg-sky-600 border border-transparent rounded-md shadow-sm hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={saveState !== 'idle'}
+                            className={`flex items-center justify-center gap-2 w-auto px-4 py-2 text-sm font-medium text-white border border-transparent rounded-md shadow-sm transition-colors duration-200
+                                ${saveState === 'success' 
+                                    ? 'bg-green-600' 
+                                    : 'bg-sky-600 hover:bg-sky-700'
+                                } 
+                                disabled:opacity-70 disabled:cursor-not-allowed`}
                         >
-                            <SaveIcon className="w-4 h-4" />
-                            <span>{isSaving ? 'Salvando...' : 'Salvar'}</span>
+                            {saveState === 'idle' && <><SaveIcon className="w-4 h-4" /><span>Salvar</span></>}
+                            {saveState === 'saving' && <><SpinnerIcon className="w-4 h-4" /><span>Salvando...</span></>}
+                            {saveState === 'success' && <><CheckIcon className="w-4 h-4" /><span>Salvo!</span></>}
                         </button>
                         <button onClick={() => window.print()} className="flex items-center justify-center gap-2 w-auto px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-slate-200 dark:bg-slate-700 border border-transparent rounded-md shadow-sm hover:bg-slate-300 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500">
                             <PrinterIcon className="w-4 h-4" />
