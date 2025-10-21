@@ -1,93 +1,82 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import toast from 'react-hot-toast'; // Importe o toast para as novas mensagens
+import toast from 'react-hot-toast';
 import { HomeIcon, PrinterIcon, SaveIcon, ClockHistoryIcon } from '../components/icons/IconComponents';
-import { Equipe, User, FormacaoDiaria, MembroComStatus, MembroStatus, Grupo, OrganizacaoSalva } from '../types';
+import { Equipe, FormacaoDiaria, MembroComStatus, MembroStatus, Grupo, OrganizacaoSalva, User } from '../types';
 import FormationCard from '../components/FormationCard';
 import HistoricoFormacaoModal from '../components/HistoricoFormacaoModal';
 
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyotEdB0INfTNUK9q6MKbHEMQFUzwi5rMYnfZ6tQ7OaQ4ojOa9J3ItXqNsjjEl4XqN0/exec'; // SUBSTITUA PELA SUA URL REAL
 
-// ====================== MODIFICAÇÕES NAS PROPS ======================
 interface FormacaoDiariaPageProps {
     onNavigate: (page: string) => void;
     currentDate: string;
     setCurrentDate: (date: string) => void;
-    // Tipagem da chave do Map e do ID do membro atualizada para 'number | string'
     dailyStatuses: Map<number | string, MembroComStatus>;
     onStatusUpdate: (memberId: number | string, status: MembroStatus, observacao?: string) => void;
     equipes: Equipe[];
     dailyGroups: Map<string, Grupo[]>;
     historicoOrganizacoes: OrganizacaoSalva[];
 }
-// =======================================================================
 
 const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, currentDate, setCurrentDate, dailyStatuses, onStatusUpdate, equipes, dailyGroups, historicoOrganizacoes }) => {
     const [formacaoDetails, setFormacaoDetails] = useState<Map<string, { veiculo: string; observacoes: string }>>(new Map());
     const [isHistoricoModalOpen, setIsHistoricoModalOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
-    // Efeito para buscar formações salvas quando a data muda
     useEffect(() => {
-        // Zera os detalhes ao mudar de data para não carregar dados do dia anterior
-        setFormacaoDetails(new Map());
+        const newDetails = new Map<string, { veiculo: string; observacoes: string }>();
+        equipes.forEach(equipe => {
+            newDetails.set(equipe.id, { veiculo: '', observacoes: '' });
+        });
+        setFormacaoDetails(newDetails);
 
         const fetchFormacoesDoDia = async () => {
+            if (!currentDate) return;
             setIsLoading(true);
             try {
                 const url = new URL(GOOGLE_SCRIPT_URL);
                 url.searchParams.append('api', 'formacaoDiaria');
                 url.searchParams.append('date', currentDate);
-
                 const response = await fetch(url.toString());
                 const result = await response.json();
 
                 if (result.success && Array.isArray(result.data) && result.data.length > 0) {
                     const savedFormations: FormacaoDiaria[] = result.data;
-                    
-                    // Atualiza os detalhes (veículo, observações) com os dados salvos
-                    setFormacaoDetails(prevDetails => {
-                        const newDetails = new Map(prevDetails);
-                        savedFormations.forEach(formacao => {
-                            newDetails.set(formacao.equipeId, {
-                                veiculo: formacao.veiculo,
-                                observacoes: formacao.observacoes
-                            });
+                    setFormacaoDetails(prev => {
+                        const updated = new Map(prev);
+                        savedFormations.forEach(f => {
+                            if (updated.has(f.equipeId)) {
+                                updated.set(f.equipeId, { veiculo: f.veiculo, observacoes: f.observacoes });
+                            }
                         });
-                        return newDetails;
+                        return updated;
                     });
 
-                    // Cria um conjunto com os UUIDs de todos os membros que estavam presentes na formação salva
                     const presentMemberUuids = new Set<string>();
-                    savedFormations.forEach(formacao => {
-                        (formacao.membrosPresentes || []).forEach(membro => presentMemberUuids.add(membro.uuid));
-                    });
+                    savedFormations.forEach(f => (f.membrosPresentes || []).forEach(m => presentMemberUuids.add(m.uuid)));
 
-                    // ====================== LÓGICA CORRIGIDA AQUI ======================
                     dailyStatuses.forEach((status, memberId) => {
-                        // A variável 'status' JÁ É o objeto MembroComStatus que precisamos.
-                        // Não é necessário procurar novamente no Map.
-                        const isPresent = presentMemberUuids.has(status.uuid);
-
-                        if (isPresent && status.status !== 'Ativo') {
-                            onStatusUpdate(memberId, 'Ativo');
-                        } else if (!isPresent && status.status === 'Ativo') {
-                            // Assume 'Folga' se não estava presente, pode ser ajustado
-                            onStatusUpdate(memberId, 'Folga');
+                        if (status.status !== 'Férias') {
+                            const isPresent = presentMemberUuids.has(status.uuid);
+                            if (isPresent && status.status !== 'Ativo') {
+                                onStatusUpdate(memberId, 'Ativo');
+                            } else if (!isPresent && status.status === 'Ativo') {
+                                onStatusUpdate(memberId, 'Folga');
+                            }
                         }
                     });
-                    // =====================================================================
-
                     toast.success('Formação anterior carregada!');
                 }
             } catch (err) {
-                toast.error('Não foi possível carregar a formação salva.');
+                toast.error('Não foi possível carregar a formação salva para esta data.');
             } finally {
                 setIsLoading(false);
             }
         };
 
         fetchFormacoesDoDia();
-    }, [currentDate]);
+    }, [currentDate, equipes]); // Dependência `onStatusUpdate` removida para evitar loops
     
     const teamMembersWithStatus = useMemo(() => {
         const map = new Map<string, MembroComStatus[]>();
@@ -96,9 +85,7 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
             const members: MembroComStatus[] = [];
             allMemberIds.forEach(id => {
                 const status = dailyStatuses.get(id);
-                if (status) {
-                    members.push(status);
-                }
+                if (status) members.push(status);
             });
             map.set(equipe.id, members);
         });
@@ -107,6 +94,7 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
 
     const handleMemberPresenceChange = (memberId: number | string, isPresent: boolean) => {
         const currentStatus = dailyStatuses.get(memberId)?.status;
+        if (currentStatus === 'Férias') return;
         if (isPresent && currentStatus !== 'Ativo') {
             onStatusUpdate(memberId, 'Ativo');
         } else if (!isPresent && currentStatus === 'Ativo') {
@@ -119,6 +107,8 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
     };
     
     const handleSaveAll = async () => {
+        if (isSaving) return;
+        setIsSaving(true);
         const loadingToastId = toast.loading('Salvando formação do dia...');
         const activeEquipes = equipes.filter(e => e.status === 'Ativo');
         const payload: Omit<FormacaoDiaria, "uuid">[] = activeEquipes.map(equipe => {
@@ -130,7 +120,7 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
                 equipeId: equipe.id,
                 nomeEquipe: equipe.nome,
                 lider: equipe.lider,
-                membrosPresentes: membrosPresentes,
+                membrosPresentes: membrosPresentes as User[],
                 veiculo: details.veiculo,
                 observacoes: details.observacoes
             };
@@ -149,11 +139,12 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Ocorreu um erro.';
             toast.error(`Falha ao salvar: ${errorMessage}`, { id: loadingToastId });
+        } finally {
+            setIsSaving(false);
         }
     };
 
     const activeEquipes = equipes.filter(e => e.status === 'Ativo');
-
     return (
         <>
             <section className="space-y-6 pb-8">
@@ -203,9 +194,13 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
                             <ClockHistoryIcon className="w-4 h-4" />
                             <span>Histórico</span>
                         </button>
-                         <button onClick={handleSaveAll} className="flex items-center justify-center gap-2 w-auto px-4 py-2 text-sm font-medium text-white bg-sky-600 border border-transparent rounded-md shadow-sm hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500">
+                         <button 
+                            onClick={handleSaveAll} 
+                            disabled={isSaving}
+                            className="flex items-center justify-center gap-2 w-auto px-4 py-2 text-sm font-medium text-white bg-sky-600 border border-transparent rounded-md shadow-sm hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
                             <SaveIcon className="w-4 h-4" />
-                            <span>Salvar</span>
+                            <span>{isSaving ? 'Salvando...' : 'Salvar'}</span>
                         </button>
                         <button onClick={() => window.print()} className="flex items-center justify-center gap-2 w-auto px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-slate-200 dark:bg-slate-700 border border-transparent rounded-md shadow-sm hover:bg-slate-300 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500">
                             <PrinterIcon className="w-4 h-4" />
@@ -216,7 +211,7 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
                 
                 {/* Formation Cards Grid */}
                 {isLoading ? (
-                    <div className="text-center py-12 text-slate-500 dark:text-slate-400">Carregando...</div>
+                    <div className="text-center py-12 text-slate-500 dark:text-slate-400">Carregando formação do dia...</div>
                 ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                         {activeEquipes.map(equipe => {

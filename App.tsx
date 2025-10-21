@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, {useState, useEffect } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
@@ -27,12 +27,12 @@ import FormacaoDiariaPage from './pages/FormacaoDiariaPage';
 import OrganizarEquipesPage from './pages/OrganizarEquipesPage';
 import FeriasPage from './pages/FeriasPage';
 import UsuariosPage from './pages/UsuariosPage';
-import { Demanda, Atividade, MembroComStatus, MembroStatus, User, Equipe, Grupo, Ferias, OrganizacaoSalva } from './types';
+import { Demanda, Atividade, MembroComStatus, MembroStatus, User, Equipe, Grupo, Ferias, OrganizacaoSalva, Role } from './types';
 
-// URL DO SEU BACKEND
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyotEdB0INfTNUK9q6MKbHEMQFUzwi5rMYnfZ6tQ7OaQ4ojOa9J3ItXqNsjjEl4XqN0/exec'; // SUBSTITUA PELA SUA URL REAL
+// SUBSTITUA PELA SUA URL REAL
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyotEdB0INfTNUK9q6MKbHEMQFUzwi5rMYnfZ6tQ7OaQ4ojOa9J3ItXqNsjjEl4XqN0/exec'; 
 
-// DADOS ESTÁTICOS QUE AINDA NÃO FORAM MIGRADOS PARA O BACKEND
+// DADOS ESTÁTICOS QUE AINDA SERÃO MIGRADOS (EX: FÉRIAS)
 const getTodayPlusDays = (days: number): string => {
     const date = new Date();
     date.setDate(date.getDate() + days);
@@ -42,10 +42,6 @@ const getTodayPlusDays = (days: number): string => {
 const DUMMY_FERIAS: Ferias[] = [
     { id: 'FER-1', funcionario: { uuid: 'dummy-uuid-5', id: 5, name: 'Elisa Gomes', roles: [] }, dataInicio: getTodayPlusDays(-5), dataFim: getTodayPlusDays(10), status: 'Em Andamento' },
     { id: 'FER-2', funcionario: { uuid: 'dummy-uuid-8', id: 8, name: 'Pedro Martins', roles: [] }, dataInicio: getTodayPlusDays(15), dataFim: getTodayPlusDays(30), status: 'Agendada' },
-];
-
-const DUMMY_ORGANIZACOES_SALVAS: OrganizacaoSalva[] = [
-    // Seus dados de DUMMY_ORGANIZACOES_SALVAS podem ser colados aqui.
 ];
 
 const updateGroupName = (group: Grupo, allGroups: Grupo[]): Grupo => {
@@ -72,6 +68,7 @@ const App: React.FC = () => {
   
   const [usuarios, setUsuarios] = useState<User[]>([]);
   const [equipes, setEquipes] = useState<Equipe[]>([]);
+  const [historicoOrganizacoes, setHistoricoOrganizacoes] = useState<OrganizacaoSalva[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
 
   const [selectedDemanda, setSelectedDemanda] = useState<Demanda | null>(null);
@@ -81,33 +78,31 @@ const App: React.FC = () => {
   const [dailyStatuses, setDailyStatuses] = useState<Map<number | string, MembroComStatus>>(new Map());
   const [dailyGroups, setDailyGroups] = useState<Map<string, Grupo[]>>(new Map());
   const [feriasList, setFeriasList] = useState<Ferias[]>(DUMMY_FERIAS);
-  const [historicoOrganizacoes, setHistoricoOrganizacoes] = useState<OrganizacaoSalva[]>(DUMMY_ORGANIZACOES_SALVAS);
 
-  // ====================== MODIFICAÇÃO APLICADA AQUI ======================
-  // A função de busca foi movida para fora do useEffect para ser reutilizável
   const fetchData = async () => {
-    // Não mostra o loader de página inteira para revalidações, apenas na carga inicial
-    if (!isLoadingData) {
-        toast.loading('Atualizando dados...', { id: 'refetching-data' });
-    } else {
-        setIsLoadingData(true);
-    }
+    if (!isLoadingData) toast.loading('Atualizando dados...', { id: 'refetching-data' });
+    else setIsLoadingData(true);
     
     try {
-      const [usersRes, equipesRes] = await Promise.all([
+      const [usersRes, equipesRes, orgsRes] = await Promise.all([
         fetch(`${GOOGLE_SCRIPT_URL}?api=usuarios`),
-        fetch(`${GOOGLE_SCRIPT_URL}?api=equipes`)
+        fetch(`${GOOGLE_SCRIPT_URL}?api=equipes`),
+        fetch(`${GOOGLE_SCRIPT_URL}?api=organizacaoEquipes`)
       ]);
       const usersResult = await usersRes.json();
       const equipesResult = await equipesRes.json();
+      const orgsResult = await orgsRes.json();
+
       if (usersResult.success) setUsuarios(usersResult.data || []);
       else throw new Error(usersResult.error || 'Falha ao buscar usuários.');
+
       if (equipesResult.success) setEquipes(equipesResult.data || []);
       else throw new Error(equipesResult.error || 'Falha ao buscar equipes.');
+
+      if (orgsResult.success) setHistoricoOrganizacoes(orgsResult.data || []);
+      else throw new Error(orgsResult.error || 'Falha ao buscar histórico de organizações.');
       
-      if (!isLoadingData) {
-        toast.success('Dados atualizados!', { id: 'refetching-data' });
-      }
+      if (!isLoadingData) toast.success('Dados atualizados!', { id: 'refetching-data' });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar dados essenciais.';
       toast.error(errorMessage, { id: 'refetching-data' });
@@ -117,23 +112,14 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchData(); // Chama a função na montagem inicial do componente
+    fetchData();
   }, []);
-  // =======================================================================
-
 
   useEffect(() => {
     const newStatuses = new Map<number | string, MembroComStatus>();
     const currentDateObj = new Date(currentDate + 'T00:00:00');
     usuarios.forEach(user => {
-        const activeVacation = feriasList.find(f => {
-            const startDate = new Date(f.dataInicio + 'T00:00:00');
-            const endDate = new Date(f.dataFim + 'T23:59:59');
-            return f.funcionario.id === user.id &&
-                   (f.status === 'Agendada' || f.status === 'Em Andamento') &&
-                   currentDateObj >= startDate &&
-                   currentDateObj <= endDate;
-        });
+        const activeVacation = feriasList.find(f => f.funcionario.id === user.id && (f.status === 'Agendada' || f.status === 'Em Andamento') && currentDateObj >= new Date(f.dataInicio + 'T00:00:00') && currentDateObj <= new Date(f.dataFim + 'T23:59:59'));
         newStatuses.set(user.id, { ...user, status: activeVacation ? 'Férias' : 'Ativo' });
     });
     setDailyStatuses(newStatuses);
@@ -152,29 +138,20 @@ const App: React.FC = () => {
     setDailyStatuses(prev => {
         const newStatuses = new Map(prev);
         const member = usuarios.find(u => u.id === memberId);
-        if (member) {
-            newStatuses.set(memberId, { ...member, status, observacao: status === 'Observação' ? observacao : undefined });
-        }
+        if (member) newStatuses.set(memberId, { ...member, status, observacao: status === 'Observação' ? observacao : undefined });
         return newStatuses;
     });
-
     if (status !== 'Ativo') {
         setDailyGroups(prevGroupsMap => {
             const newGroupsMap = new Map(prevGroupsMap);
             let mapWasChanged = false;
-
             newGroupsMap.forEach((groups: Grupo[], teamId) => {
-                const groupsWithMemberRemoved = groups
-                    .map(group => ({ ...group, membros: group.membros.filter(m => m.id !== memberId) }))
-                    .filter(g => g.membros.length > 0);
-
+                const groupsWithMemberRemoved = groups.map(group => ({ ...group, membros: group.membros.filter(m => m.id !== memberId) })).filter(g => g.membros.length > 0);
                 if (groupsWithMemberRemoved.length === groups.length) return;
-
                 mapWasChanged = true;
                 const finalGroups = groupsWithMemberRemoved.map(g => updateGroupName(g, groupsWithMemberRemoved));
                 newGroupsMap.set(teamId, finalGroups);
             });
-            
             return mapWasChanged ? newGroupsMap : prevGroupsMap;
         });
     }
@@ -202,7 +179,6 @@ const App: React.FC = () => {
     }
     setActivePage(page);
   };
-
   const renderPage = () => {
     if (isLoadingData) {
         return <div className="text-center py-20 text-slate-500 dark:text-slate-400">Carregando dados do sistema...</div>;
@@ -222,21 +198,44 @@ const App: React.FC = () => {
       case 'pesquisar_fichas_vez': return <PesquisarFichasVezPage onNavigate={handleNavigate} />;
       case 'perfil': return <PerfilPage onNavigate={handleNavigate} />;
       
-      // ====================== MODIFICAÇÃO APLICADA AQUI ======================
       case 'equipes': 
         return <EquipesPage 
                     onNavigate={handleNavigate} 
                     historicoOrganizacoes={historicoOrganizacoes} 
                     equipes={equipes}
                     usuarios={usuarios}
-                    onDataUpdate={fetchData} // Passando a função para recarregar
+                    onDataUpdate={fetchData}
                 />;
-      // =======================================================================
 
       case 'usuarios': return <UsuariosPage onNavigate={handleNavigate} />;
       case 'ferias': return <FeriasPage onNavigate={handleNavigate} feriasList={feriasList} setFeriasList={setFeriasList} allUsers={usuarios} />;
-      case 'formacao_diaria': return <FormacaoDiariaPage onNavigate={handleNavigate} currentDate={currentDate} setCurrentDate={setCurrentDate} dailyStatuses={dailyStatuses} onStatusUpdate={updateMemberStatus} equipes={equipes} dailyGroups={dailyGroups} historicoOrganizacoes={historicoOrganizacoes} />;
-      case 'organizar_equipes': return <OrganizarEquipesPage onNavigate={handleNavigate} currentDate={currentDate} setCurrentDate={setCurrentDate} dailyStatuses={dailyStatuses} onStatusUpdate={updateMemberStatus} equipes={equipes} dailyGroups={dailyGroups} onGroupsUpdate={updateDailyGroups} historicoOrganizacoes={historicoOrganizacoes} onHistoricoUpdate={setHistoricoOrganizacoes} />;
+      
+      case 'formacao_diaria': 
+        return <FormacaoDiariaPage 
+                    onNavigate={handleNavigate} 
+                    currentDate={currentDate} 
+                    setCurrentDate={setCurrentDate} 
+                    dailyStatuses={dailyStatuses} 
+                    onStatusUpdate={updateMemberStatus} 
+                    equipes={equipes} 
+                    dailyGroups={dailyGroups} 
+                    historicoOrganizacoes={historicoOrganizacoes} 
+                />;
+      
+      case 'organizar_equipes': 
+        return <OrganizarEquipesPage 
+                    onNavigate={handleNavigate} 
+                    currentDate={currentDate} 
+                    setCurrentDate={setCurrentDate} 
+                    dailyStatuses={dailyStatuses} 
+                    onStatusUpdate={updateMemberStatus}
+                    equipes={equipes}
+                    dailyGroups={dailyGroups}
+                    onGroupsUpdate={updateDailyGroups}
+                    historicoOrganizacoes={historicoOrganizacoes}
+                    onHistoricoUpdate={setHistoricoOrganizacoes}
+                />;
+      
       case 'demandas': return <DemandasPage onNavigate={handleNavigate} />;
       case 'atividade_nebulizacao': return <AtividadeNebulizacaoPage onNavigate={handleNavigate} notification={notificationForDemanda} equipes={equipes} />;
       case 'atividade_controle_criadouros': return <AtividadeControleCriadourosPage onNavigate={handleNavigate} notification={notificationForDemanda} equipes={equipes} />;
