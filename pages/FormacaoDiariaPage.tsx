@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import toast from 'react-hot-toast';
+import toast, { Toaster } from 'react-hot-toast';
 import { HomeIcon, PrinterIcon, SaveIcon, ClockHistoryIcon, CheckIcon, SpinnerIcon } from '../components/icons/IconComponents';
 import { Equipe, FormacaoDiaria, MembroComStatus, MembroStatus, Grupo, OrganizacaoSalva, User } from '../types';
 import FormationCard from '../components/FormationCard';
@@ -25,12 +25,14 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
     const [saveState, setSaveState] = useState<'idle' | 'saving' | 'success'>('idle');
 
     useEffect(() => {
+        // 1. Reseta os detalhes para um estado limpo imediatamente ao mudar a data.
         const newDetails = new Map<string, { veiculo: string; observacoes: string }>();
         equipes.forEach(equipe => {
             newDetails.set(equipe.id, { veiculo: '', observacoes: '' });
         });
         setFormacaoDetails(newDetails);
 
+        // A função de busca agora é definida e chamada dentro do efeito.
         const fetchFormacoesDoDia = async () => {
             if (!currentDate) return;
             setIsLoading(true);
@@ -43,6 +45,8 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
 
                 if (result.success && Array.isArray(result.data) && result.data.length > 0) {
                     const savedFormations: FormacaoDiaria[] = result.data;
+                    
+                    // 2. Preenche os detalhes com os dados encontrados para a nova data.
                     setFormacaoDetails(prev => {
                         const updated = new Map(prev);
                         savedFormations.forEach(f => {
@@ -53,6 +57,7 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
                         return updated;
                     });
 
+                    // 3. Atualiza os status de presença com base nos dados encontrados.
                     const presentMemberUuids = new Set<string>();
                     savedFormations.forEach(f => (f.membrosPresentes || []).forEach(m => presentMemberUuids.add(m.uuid)));
                     
@@ -76,14 +81,10 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
         };
 
         fetchFormacoesDoDia();
-    // ====================== CORREÇÃO DEFINITIVA APLICADA AQUI ======================
-    // Removemos 'onStatusUpdate' da lista de dependências.
-    // Este efeito SÓ DEVE rodar quando a data ou a lista de equipes mudar.
-    // Ele não deve reagir a uma mudança de status feita pelo usuário na UI.
-    // Você pode ver um aviso do linter (react-hooks/exhaustive-deps), mas neste caso
-    // específico, ignorá-lo é a decisão correta para quebrar o loop de recarregamento.
+    // A remoção de `onStatusUpdate` da lista de dependências é a correção definitiva.
+    // O useEffect agora só roda quando a data ou a lista de equipes muda.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentDate, equipes]);
-    // =======================================================================
     
     const teamMembersWithStatus = useMemo(() => {
         const map = new Map<string, MembroComStatus[]>();
@@ -116,7 +117,7 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
                 equipeId: equipe.id,
                 nomeEquipe: equipe.nome,
                 lider: equipe.lider,
-                membrosPresentes: membrosPresentes as User[],
+                membrosPresentes: membrosPresentes, // Envia o objeto MembroComStatus completo
                 veiculo: details.veiculo,
                 observacoes: details.observacoes
             };
