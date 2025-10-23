@@ -3,7 +3,6 @@ import toast from 'react-hot-toast';
 import { HomeIcon, PlusIcon, UsersIcon, XIcon, SaveIcon, ChevronDownIcon, ClockHistoryIcon, SpinnerIcon, CheckIcon } from '../components/icons/IconComponents';
 import { Equipe, User, Grupo, MembroComFuncao, Funcao, MembroComStatus, MembroStatus, OrganizacaoSalva } from '../types';
 import HistoricoOrganizacaoModal from '../components/HistoricoOrganizacaoModal';
-// Importamos o StatusSelector, que agora vive em seu próprio arquivo.
 import StatusSelector from '../components/StatusSelector';
 
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyotEdB0INfTNUK9q6MKbHEMQFUzwi5rMYnfZ6tQ7OaQ4ojOa9J3ItXqNsjjEl4XqN0/exec'; // SUBSTITUA PELA SUA URL REAL
@@ -25,6 +24,8 @@ interface OrganizarEquipesPageProps {
     dailyStatuses: Map<number | string, MembroComStatus>;
     onStatusUpdate: (memberId: number | string, status: MembroStatus, observacao?: string) => void;
     equipes: Equipe[];
+    dailyGroups: Map<string, Grupo[]>;
+    onGroupsUpdate: (teamId: string, groups: Grupo[]) => void;
     historicoOrganizacoes: OrganizacaoSalva[];
     onHistoricoUpdate: React.Dispatch<React.SetStateAction<OrganizacaoSalva[]>>;
 }
@@ -47,45 +48,29 @@ const updateGroupName = (group: Grupo, allGroups: Grupo[]): Grupo => {
     return { ...group, nome: `${newPrefix} ${nextNumber}` };
 };
 
-const MultiRoleSelector: React.FC<{
-    selectedFuncoes: Funcao[];
-    onSelectionChange: (funcoes: Funcao[]) => void;
-}> = ({ selectedFuncoes, onSelectionChange }) => {
+const MultiRoleSelector: React.FC<{ selectedFuncoes: Funcao[]; onSelectionChange: (funcoes: Funcao[]) => void; }> = ({ selectedFuncoes, onSelectionChange }) => {
     const [isOpen, setIsOpen] = useState(false);
     const wrapperRef = useRef<HTMLDivElement>(null);
     const instanceId = useId();
 
     useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
-                setIsOpen(false);
-            }
-        };
+        const handleClickOutside = (event: MouseEvent) => { if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) setIsOpen(false); };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
     const handleToggle = (funcao: Funcao) => {
         const newSelection = new Set(selectedFuncoes);
-        if (newSelection.has(funcao)) {
-            newSelection.delete(funcao);
-        } else {
-            newSelection.add(funcao);
-        }
+        if (newSelection.has(funcao)) newSelection.delete(funcao);
+        else newSelection.add(funcao);
         onSelectionChange(Array.from(newSelection));
     };
 
-    const displayLabel = selectedFuncoes.length > 0
-        ? `${selectedFuncoes.length} funç${selectedFuncoes.length > 1 ? 'ões' : 'ão'}`
-        : 'Definir Funções';
+    const displayLabel = selectedFuncoes.length > 0 ? `${selectedFuncoes.length} funç${selectedFuncoes.length > 1 ? 'ões' : 'ão'}` : 'Definir Funções';
 
     return (
         <div className="relative w-full sm:w-36" ref={wrapperRef}>
-            <button
-                type="button"
-                onClick={() => setIsOpen(!isOpen)}
-                className="w-full flex items-center justify-between px-2 py-1 text-xs font-medium rounded-md transition-all duration-150 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-500"
-            >
+            <button type="button" onClick={() => setIsOpen(!isOpen)} className="w-full flex items-center justify-between px-2 py-1 text-xs font-medium rounded-md transition-all duration-150 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-500">
                 {displayLabel}
                 <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
             </button>
@@ -94,20 +79,8 @@ const MultiRoleSelector: React.FC<{
                     <ul>
                         {FUNCOES.map(funcao => (
                             <li key={funcao} className="flex items-center px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-600">
-                                <input
-                                    type="checkbox"
-                                    id={`${instanceId}-${funcao}`}
-                                    checked={selectedFuncoes.includes(funcao)}
-                                    onChange={() => handleToggle(funcao)}
-                                    className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                                />
-                                <label
-                                    htmlFor={`${instanceId}-${funcao}`}
-                                    className="ml-3 flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200 cursor-pointer"
-                                >
-                                    <span className={`w-3 h-3 rounded-full ${FUNCAO_COLORS[funcao].dot}`}></span>
-                                    {funcao}
-                                </label>
+                                <input type="checkbox" id={`${instanceId}-${funcao}`} checked={selectedFuncoes.includes(funcao)} onChange={() => handleToggle(funcao)} className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" />
+                                <label htmlFor={`${instanceId}-${funcao}`} className="ml-3 flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200 cursor-pointer"><span className={`w-3 h-3 rounded-full ${FUNCAO_COLORS[funcao].dot}`}></span>{funcao}</label>
                             </li>
                         ))}
                     </ul>
@@ -116,21 +89,19 @@ const MultiRoleSelector: React.FC<{
         </div>
     );
 };
-const OrganizarEquipesPage: React.FC<OrganizarEquipesPageProps> = ({ onNavigate, currentDate, setCurrentDate, dailyStatuses, onStatusUpdate, equipes, historicoOrganizacoes, onHistoricoUpdate }) => {
+const OrganizarEquipesPage: React.FC<OrganizarEquipesPageProps> = ({ onNavigate, currentDate, setCurrentDate, dailyStatuses, onStatusUpdate, equipes, dailyGroups, onGroupsUpdate, historicoOrganizacoes, onHistoricoUpdate }) => {
     const [selectedTeamId, setSelectedTeamId] = useState<string>('');
     const [isHistoricoModalOpen, setIsHistoricoModalOpen] = useState(false);
-    const [groups, setGroups] = useState<Grupo[]>([]);
     const [saveState, setSaveState] = useState<'idle' | 'saving' | 'success'>('idle');
+    
+    const groups = useMemo(() => dailyGroups.get(selectedTeamId) || [], [dailyGroups, selectedTeamId]);
     
     const teamMembers = useMemo(() => {
         const team = equipes.find(e => e.id === selectedTeamId);
         if (!team) return [];
         const allTeamMemberIds = new Set<number | string>([team.lider.id, ...team.membros.map(m => m.id)]);
         const members: MembroComStatus[] = [];
-        allTeamMemberIds.forEach(id => { 
-            const status = dailyStatuses.get(id); 
-            if (status) members.push(status); 
-        });
+        allTeamMemberIds.forEach(id => { const status = dailyStatuses.get(id); if (status) members.push(status); });
         return members.sort((a,b) => a.name.localeCompare(b.name));
     }, [selectedTeamId, dailyStatuses, equipes]);
     
@@ -145,20 +116,6 @@ const OrganizarEquipesPage: React.FC<OrganizarEquipesPageProps> = ({ onNavigate,
         }
     }, [equipes, selectedTeamId]);
 
-    useEffect(() => {
-        if (!currentDate || !selectedTeamId || !historicoOrganizacoes) return;
-        const dateAsDDMMYYYY = new Date(currentDate + 'T00:00:00').toLocaleDateString('pt-BR', {timeZone: 'UTC'});
-        const latestOrgForTeamAndDate = historicoOrganizacoes
-            .filter(org => (org.data === currentDate || org.data === dateAsDDMMYYYY) && org.equipe.id === selectedTeamId)
-            .sort((a, b) => new Date(b.dataSalvamento).getTime() - new Date(a.dataSalvamento).getTime())[0];
-        
-        setGroups(latestOrgForTeamAndDate ? latestOrgForTeamAndDate.grupos : []);
-        
-        if (latestOrgForTeamAndDate) {
-            toast.success(`Organização anterior para ${latestOrgForTeamAndDate.equipe.nome} carregada.`);
-        }
-    }, [currentDate, selectedTeamId, historicoOrganizacoes]);
-
     const handleSaveOrganization = async () => {
         if (saveState !== 'idle') return;
         setSaveState('saving');
@@ -169,38 +126,16 @@ const OrganizarEquipesPage: React.FC<OrganizarEquipesPageProps> = ({ onNavigate,
             return;
         }
         if (groups.length === 0 && availableMembers.filter(m => m.status === 'Ativo').length > 0) {
-            const confirmed = await new Promise((resolve) => { 
-                toast((t) => (
-                    <div>
-                        <p>Nenhum grupo foi formado. Salvar mesmo assim?</p>
-                        <div className="flex gap-2">
-                            <button onClick={() => { resolve(true); toast.dismiss(t.id); }}>Sim</button>
-                            <button onClick={() => { resolve(false); toast.dismiss(t.id); }}>Não</button>
-                        </div>
-                    </div>
-                )); 
-            });
+            const confirmed = await new Promise((resolve) => { toast((t) => (<div><p>Nenhum grupo formado. Salvar mesmo assim?</p><div className="flex gap-2"><button onClick={() => { resolve(true); toast.dismiss(t.id); }}>Sim</button><button onClick={() => { resolve(false); toast.dismiss(t.id); }}>Não</button></div></div>)); });
             if (!confirmed) {
                 setSaveState('idle');
                 return;
             }
         }
         const currentTeamMembersStatus = teamMembers.map(({ id, uuid, name, roles, status, observacao }) => ({ id, uuid, name, roles, status, observacao }));
-        const payload: Omit<OrganizacaoSalva, 'id'> = { 
-            data: currentDate, 
-            dataSalvamento: new Date().toISOString(), 
-            usuarioSalvo: { uuid: 'user-uuid-placeholder', id: 99, name: 'WELBSTER', roles: ['Admin'] }, 
-            equipe: team, 
-            grupos: groups, 
-            membrosStatus: currentTeamMembersStatus 
-        };
+        const payload: Omit<OrganizacaoSalva, 'id'> = { data: currentDate, dataSalvamento: new Date().toISOString(), usuarioSalvo: { uuid: 'user-uuid-placeholder', id: 99, name: 'WELBSTER', roles: ['Admin'] }, equipe: team, grupos: groups, membrosStatus: currentTeamMembersStatus };
         try {
-            const response = await fetch(GOOGLE_SCRIPT_URL, { 
-                method: 'POST', 
-                redirect: 'follow', 
-                body: JSON.stringify({ api: 'organizacaoEquipes', payload }), 
-                headers: { "Content-Type": "text/plain;charset=utf-8" } 
-            });
+            const response = await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', redirect: 'follow', body: JSON.stringify({ api: 'organizacaoEquipes', payload }), headers: { "Content-Type": "text/plain;charset=utf-8" } });
             const result = await response.json();
             if (!result.success) throw new Error(result.error);
             onHistoricoUpdate(prev => [result.newRecord, ...prev].sort((a,b) => new Date(b.dataSalvamento).getTime() - new Date(a.dataSalvamento).getTime()));
@@ -220,12 +155,10 @@ const OrganizarEquipesPage: React.FC<OrganizarEquipesPageProps> = ({ onNavigate,
         let nextGroupNumber = 1;
         while (existingNumbers.has(nextGroupNumber)) nextGroupNumber++;
         const newGroup: Grupo = { id: `group-${Date.now()}`, nome: `Grupo ${nextGroupNumber}`, membros: [] };
-        setGroups(prevGroups => [...prevGroups, newGroup]);
+        onGroupsUpdate(selectedTeamId, [...groups, newGroup]);
     };
     
-    const handleRemoveGroup = (groupId: string) => {
-        setGroups(prevGroups => prevGroups.filter(g => g.id !== groupId));
-    };
+    const handleRemoveGroup = (groupId: string) => onGroupsUpdate(selectedTeamId, groups.filter(g => g.id !== groupId));
     
     const handleAssignMember = (groupId: string, memberId: number | string) => {
         const member = teamMembers.find(m => m.id === memberId);
@@ -242,8 +175,7 @@ const OrganizarEquipesPage: React.FC<OrganizarEquipesPageProps> = ({ onNavigate,
         });
         if (modifiedGroup) {
             const finalGroup = updateGroupName(modifiedGroup, intermediateGroups);
-            const finalGroups = intermediateGroups.map(g => g.id === groupId ? finalGroup : g);
-            setGroups(finalGroups);
+            onGroupsUpdate(selectedTeamId, intermediateGroups.map(g => g.id === groupId ? finalGroup : g));
         }
     };
 
@@ -253,21 +185,17 @@ const OrganizarEquipesPage: React.FC<OrganizarEquipesPageProps> = ({ onNavigate,
         const updatedGroup = { ...group, membros: group.membros.filter(m => m.id !== memberId) };
         const intermediateGroups = groups.map(g => g.id === groupId ? updatedGroup : g);
         const finalGroup = updateGroupName(updatedGroup, intermediateGroups);
-        setGroups(intermediateGroups.map(g => g.id === groupId ? finalGroup : g));
+        onGroupsUpdate(selectedTeamId, intermediateGroups.map(g => g.id === groupId ? finalGroup : g));
     };
 
-    const handleGroupNameChange = (groupId: string, newName: string) => {
-        setGroups(prevGroups => prevGroups.map(g => g.id === groupId ? { ...g, nome: newName } : g));
-    };
+    const handleGroupNameChange = (groupId: string, newName: string) => onGroupsUpdate(selectedTeamId, groups.map(g => g.id === groupId ? { ...g, nome: newName } : g));
     
     const handleMemberFunctionsChange = (groupId: string, memberId: number | string, funcoes: Funcao[]) => {
         const newGroups = groups.map(group => {
-            if (group.id === groupId) {
-                return { ...group, membros: group.membros.map(member => member.id === memberId ? { ...member, funcoes: funcoes.sort() } : member) };
-            }
+            if (group.id === groupId) return { ...group, membros: group.membros.map(member => member.id === memberId ? { ...member, funcoes: funcoes.sort() } : member) };
             return group;
         });
-        setGroups(newGroups);
+        onGroupsUpdate(selectedTeamId, newGroups);
     };
 
     const activeEquipes = equipes.filter(e => e.status === 'Ativo');
@@ -276,27 +204,11 @@ const OrganizarEquipesPage: React.FC<OrganizarEquipesPageProps> = ({ onNavigate,
             <section className="space-y-6 pb-8">
                 {/* Breadcrumbs */}
                  <div>
-                  <nav className="flex" aria-label="Breadcrumb">
-                    <ol className="inline-flex items-center space-x-1 md:space-x-2 rtl:space-x-reverse text-sm">
-                        <li className="inline-flex items-center">
-                            <button onClick={() => onNavigate('dashboard')} className="inline-flex items-center font-medium text-slate-500 dark:text-slate-400 hover:text-sky-600 dark:hover:text-white transition-colors duration-200">
-                                <HomeIcon className="w-4 h-4 me-2.5" />
-                            </button>
-                        </li>
-                        <li>
-                            <div className="flex items-center">
-                                <svg className="rtl:rotate-180 w-3 h-3 text-slate-400 dark:text-slate-500 mx-1" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10"><path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m1 9 4-4-4-4"/></svg>
-                                <span className="ms-1 font-medium text-slate-500 dark:text-slate-400 md:ms-2">Recursos Humanos</span>
-                            </div>
-                        </li>
-                        <li aria-current="page">
-                            <div className="flex items-center">
-                                <svg className="rtl:rotate-180 w-3 h-3 text-slate-400 dark:text-slate-500 mx-1" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10"><path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m1 9 4-4-4-4"/></svg>
-                                <span className="ms-1 font-medium text-slate-400 dark:text-slate-500 md:ms-2">Organizar Equipe</span>
-                            </div>
-                        </li>
-                    </ol>
-                  </nav>
+                  <nav className="flex" aria-label="Breadcrumb"><ol className="inline-flex items-center space-x-1 md:space-x-2 rtl:space-x-reverse text-sm">
+                        <li className="inline-flex items-center"><button onClick={() => onNavigate('dashboard')} className="inline-flex items-center font-medium text-slate-500 dark:text-slate-400 hover:text-sky-600 dark:hover:text-white transition-colors duration-200"><HomeIcon className="w-4 h-4 me-2.5" /></button></li>
+                        <li><div className="flex items-center"><svg className="rtl:rotate-180 w-3 h-3 text-slate-400 dark:text-slate-500 mx-1" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10"><path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m1 9 4-4-4-4"/></svg><span className="ms-1 font-medium text-slate-500 dark:text-slate-400 md:ms-2">Recursos Humanos</span></div></li>
+                        <li aria-current="page"><div className="flex items-center"><svg className="rtl:rotate-180 w-3 h-3 text-slate-400 dark:text-slate-500 mx-1" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10"><path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m1 9 4-4-4-4"/></svg><span className="ms-1 font-medium text-slate-400 dark:text-slate-500 md:ms-2">Organizar Equipe</span></div></li>
+                    </ol></nav>
                 </div>
                 {/* Header and Actions */}
                 <div className="bg-white dark:bg-slate-800/50 p-4 sm:p-6 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">

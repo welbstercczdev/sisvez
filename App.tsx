@@ -80,14 +80,26 @@ const App: React.FC = () => {
   const fetchData = async () => {
     if (!isLoadingData) toast.loading('Atualizando dados...', { id: 'refetching-data' });
     else setIsLoadingData(true);
+    
     try {
-      const [usersRes, equipesRes, orgsRes] = await Promise.all([ fetch(`${GOOGLE_SCRIPT_URL}?api=usuarios`), fetch(`${GOOGLE_SCRIPT_URL}?api=equipes`), fetch(`${GOOGLE_SCRIPT_URL}?api=organizacaoEquipes`) ]);
+      const [usersRes, equipesRes, orgsRes] = await Promise.all([
+        fetch(`${GOOGLE_SCRIPT_URL}?api=usuarios`),
+        fetch(`${GOOGLE_SCRIPT_URL}?api=equipes`),
+        fetch(`${GOOGLE_SCRIPT_URL}?api=organizacaoEquipes`)
+      ]);
       const usersResult = await usersRes.json();
       const equipesResult = await equipesRes.json();
       const orgsResult = await orgsRes.json();
-      if (usersResult.success) setUsuarios(usersResult.data || []); else throw new Error(usersResult.error || 'Falha ao buscar usuários.');
-      if (equipesResult.success) setEquipes(equipesResult.data || []); else throw new Error(equipesResult.error || 'Falha ao buscar equipes.');
-      if (orgsResult.success) setHistoricoOrganizacoes(orgsResult.data || []); else throw new Error(orgsResult.error || 'Falha ao buscar histórico.');
+
+      if (usersResult.success) setUsuarios(usersResult.data || []);
+      else throw new Error(usersResult.error || 'Falha ao buscar usuários.');
+
+      if (equipesResult.success) setEquipes(equipesResult.data || []);
+      else throw new Error(equipesResult.error || 'Falha ao buscar equipes.');
+
+      if (orgsResult.success) setHistoricoOrganizacoes(orgsResult.data || []);
+      else throw new Error(orgsResult.error || 'Falha ao buscar histórico de organizações.');
+      
       if (!isLoadingData) toast.success('Dados atualizados!', { id: 'refetching-data' });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar dados essenciais.';
@@ -97,7 +109,9 @@ const App: React.FC = () => {
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   useEffect(() => {
     const newStatuses = new Map<number | string, MembroComStatus>();
@@ -108,6 +122,34 @@ const App: React.FC = () => {
     });
     setDailyStatuses(newStatuses);
   }, [currentDate, feriasList, usuarios]);
+
+  useEffect(() => {
+    if (!currentDate || equipes.length === 0) {
+      const newGroupsMap = new Map<string, Grupo[]>();
+      equipes.forEach(equipe => newGroupsMap.set(equipe.id, []));
+      setDailyGroups(newGroupsMap);
+      return;
+    }
+    const dateAsDDMMYYYY = new Date(currentDate + 'T00:00:00').toLocaleDateString('pt-BR', {timeZone: 'UTC'});
+    const latestOrgByTeam = new Map<string, OrganizacaoSalva>();
+    historicoOrganizacoes
+        .filter(org => (org.data === currentDate || org.data === dateAsDDMMYYYY))
+        .sort((a, b) => new Date(b.dataSalvamento).getTime() - new Date(a.dataSalvamento).getTime())
+        .forEach(org => {
+            if (!latestOrgByTeam.has(org.equipe.id)) {
+                latestOrgByTeam.set(org.equipe.id, org);
+            }
+        });
+    const newGroupsMap = new Map<string, Grupo[]>();
+    equipes.forEach(equipe => {
+        const savedOrg = latestOrgByTeam.get(equipe.id);
+        newGroupsMap.set(equipe.id, savedOrg ? savedOrg.grupos : []);
+    });
+    setDailyGroups(newGroupsMap);
+    if (latestOrgByTeam.size > 0) {
+        toast.success("Organizações salvas para esta data foram carregadas.");
+    }
+  }, [currentDate, historicoOrganizacoes, equipes]);
 
   const updateDailyGroups = useCallback((teamId: string, newGroups: Grupo[]) => {
       setDailyGroups(prev => new Map(prev).set(teamId, newGroups));
@@ -202,7 +244,7 @@ const App: React.FC = () => {
                     dailyStatuses={dailyStatuses} 
                     onStatusUpdate={updateMemberStatus} 
                     equipes={equipes} 
-                    dailyGroups={dailyGroups} 
+                    dailyGroups={dailyGroups}
                     historicoOrganizacoes={historicoOrganizacoes} 
                 />;
       
@@ -214,6 +256,8 @@ const App: React.FC = () => {
                     dailyStatuses={dailyStatuses} 
                     onStatusUpdate={updateMemberStatus}
                     equipes={equipes}
+                    dailyGroups={dailyGroups}
+                    onGroupsUpdate={updateDailyGroups}
                     historicoOrganizacoes={historicoOrganizacoes}
                     onHistoricoUpdate={setHistoricoOrganizacoes}
                 />;

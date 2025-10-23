@@ -25,14 +25,12 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
     const [saveState, setSaveState] = useState<'idle' | 'saving' | 'success'>('idle');
 
     useEffect(() => {
-        // 1. Reseta os detalhes para um estado limpo imediatamente ao mudar a data.
         const newDetails = new Map<string, { veiculo: string; observacoes: string }>();
         equipes.forEach(equipe => {
             newDetails.set(equipe.id, { veiculo: '', observacoes: '' });
         });
         setFormacaoDetails(newDetails);
 
-        // A função de busca agora é definida e chamada dentro do efeito.
         const fetchFormacoesDoDia = async () => {
             if (!currentDate) return;
             setIsLoading(true);
@@ -46,7 +44,6 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
                 if (result.success && Array.isArray(result.data) && result.data.length > 0) {
                     const savedFormations: FormacaoDiaria[] = result.data;
                     
-                    // 2. Preenche os detalhes com os dados encontrados para a nova data.
                     setFormacaoDetails(prev => {
                         const updated = new Map(prev);
                         savedFormations.forEach(f => {
@@ -57,7 +54,6 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
                         return updated;
                     });
 
-                    // 3. Atualiza os status de presença com base nos dados encontrados.
                     const presentMemberUuids = new Set<string>();
                     savedFormations.forEach(f => (f.membrosPresentes || []).forEach(m => presentMemberUuids.add(m.uuid)));
                     
@@ -81,8 +77,6 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
         };
 
         fetchFormacoesDoDia();
-    // A remoção de `onStatusUpdate` da lista de dependências é a correção definitiva.
-    // O useEffect agora só roda quando a data ou a lista de equipes muda.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentDate, equipes]);
     
@@ -117,7 +111,7 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
                 equipeId: equipe.id,
                 nomeEquipe: equipe.nome,
                 lider: equipe.lider,
-                membrosPresentes: membrosPresentes, // Envia o objeto MembroComStatus completo
+                membrosPresentes: membrosPresentes,
                 veiculo: details.veiculo,
                 observacoes: details.observacoes
             };
