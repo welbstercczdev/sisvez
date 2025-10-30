@@ -1,21 +1,30 @@
 import React from 'react';
 
-// ====================== MODIFICAÇÕES APLICADAS AQUI ======================
+// ====================== CORREÇÃO E CENTRALIZAÇÃO APLICADA AQUI ======================
+export type MembroStatus = 'Ativo' | 'Folga' | 'Férias' | 'Curso' | 'GLM' | 'Observação' | 'Emprestado';
 
-// 1. As constantes estáticas de roles foram REMOVIDAS.
-// A lista de permissões agora virá da sua API.
-// export const ROLES_DISPONIVEIS = [...] as const;
-// export type Role = typeof ROLES_DISPONIVEIS[number];
+// A lista completa de status, exportada para ser usada nos seletores
+export const STATUSES: MembroStatus[] = ['Ativo', 'Folga', 'Férias', 'Curso', 'GLM', 'Observação'];
 
-// 2. Foi criada uma NOVA INTERFACE para representar uma Role como um objeto do banco de dados.
+// A definição de cores completa, agora centralizada e exportada
+export const STATUS_COLORS: Record<MembroStatus, { bg: string; text: string; dot: string; }> = {
+    'Ativo': { bg: 'bg-green-100 dark:bg-green-900/70', text: 'text-green-800 dark:text-green-200', dot: 'bg-green-500' },
+    'Folga': { bg: 'bg-sky-100 dark:bg-sky-900/70', text: 'text-sky-800 dark:text-sky-200', dot: 'bg-sky-500' },
+    'Férias': { bg: 'bg-orange-100 dark:bg-orange-900/70', text: 'text-orange-800 dark:text-orange-200', dot: 'bg-orange-500' },
+    'Curso': { bg: 'bg-violet-100 dark:bg-violet-900/70', text: 'text-violet-800 dark:text-violet-200', dot: 'bg-violet-500' },
+    'GLM': { bg: 'bg-slate-200 dark:bg-slate-700', text: 'text-slate-800 dark:text-slate-200', dot: 'bg-slate-500' },
+    'Observação': { bg: 'bg-yellow-100 dark:bg-yellow-900/70', text: 'text-yellow-800 dark:text-yellow-200', dot: 'bg-yellow-500' },
+    'Emprestado': { bg: 'bg-pink-100 dark:bg-pink-900/70', text: 'text-pink-800 dark:text-pink-200', dot: 'bg-pink-500' },
+};
+
+// =======================================================================
+
 export interface Role {
   uuid: string;
   name: string;
   description: string;
   color: string;
 }
-
-// =======================================================================
 
 export interface NavItem {
   id: string;
@@ -78,8 +87,6 @@ export interface User {
   uuid: string;
   id: number | string;
   name: string;
-  // 3. A propriedade 'roles' agora é um array de STRINGS.
-  // O backend salva e envia apenas os nomes das roles associadas ao usuário.
   roles: string[];
 }
 
@@ -118,12 +125,25 @@ export interface Demanda {
   notificacaoOrigem: string;
 }
 
+export interface MembroComStatus extends User {
+  status: MembroStatus;
+  observacao?: string;
+}
+
+export interface MembroPresente extends MembroComStatus {
+  equipeOrigem?: {
+    id: string;
+    nome: string;
+  };
+}
+
 export interface FormacaoDiaria {
+  uuid?: string;
   data: string;
   equipeId: string;
   nomeEquipe: string;
   lider: User;
-  membrosPresentes: User[];
+  membrosPresentes: MembroPresente[];
   veiculo: string;
   observacoes: string;
 }
@@ -138,13 +158,6 @@ export interface Grupo {
   id: string;
   nome: string;
   membros: MembroComFuncao[];
-}
-
-export type MembroStatus = 'Ativo' | 'Folga' | 'Férias' | 'Curso' | 'GLM' | 'Observação';
-
-export interface MembroComStatus extends User {
-  status: MembroStatus;
-  observacao?: string;
 }
 
 export interface OrganizacaoSalva {

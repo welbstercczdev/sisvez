@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import { HomeIcon, PrinterIcon, SaveIcon, ClockHistoryIcon, CheckIcon, SpinnerIcon } from '../components/icons/IconComponents';
-import { Equipe, FormacaoDiaria, MembroComStatus, MembroStatus, Grupo, OrganizacaoSalva, User } from '../types';
+import { Equipe, FormacaoDiaria, MembroComStatus, MembroStatus, Grupo, OrganizacaoSalva, User, MembroPresente } from '../types';
 import FormationCard from '../components/FormationCard';
 import HistoricoFormacaoModal from '../components/HistoricoFormacaoModal';
 
@@ -14,22 +14,39 @@ interface FormacaoDiariaPageProps {
     dailyStatuses: Map<number | string, MembroComStatus>;
     onStatusUpdate: (memberId: number | string, status: MembroStatus, observacao?: string) => void;
     equipes: Equipe[];
+    usuarios: User[];
     dailyGroups: Map<string, Grupo[]>;
     historicoOrganizacoes: OrganizacaoSalva[];
+    borrowedMembers: Map<string, MembroPresente[]>;
+    onBorrowMember: (member: User, fromTeam: Equipe, toTeamId: string) => void;
+    setBorrowedMembers: React.Dispatch<React.SetStateAction<Map<string, MembroPresente[]>>>;
 }
 
-const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, currentDate, setCurrentDate, dailyStatuses, onStatusUpdate, equipes, dailyGroups, historicoOrganizacoes }) => {
+const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ 
+    onNavigate, 
+    currentDate, 
+    setCurrentDate, 
+    dailyStatuses, 
+    onStatusUpdate, 
+    equipes, 
+    usuarios,
+    dailyGroups, 
+    historicoOrganizacoes,
+    borrowedMembers,
+    onBorrowMember,
+    setBorrowedMembers
+}) => {
     const [formacaoDetails, setFormacaoDetails] = useState<Map<string, { veiculo: string; observacoes: string }>>(new Map());
     const [isHistoricoModalOpen, setIsHistoricoModalOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [saveState, setSaveState] = useState<'idle' | 'saving' | 'success'>('idle');
 
     useEffect(() => {
+        // Reseta os detalhes e os empréstimos para um estado limpo antes de buscar
         const newDetails = new Map<string, { veiculo: string; observacoes: string }>();
-        equipes.forEach(equipe => {
-            newDetails.set(equipe.id, { veiculo: '', observacoes: '' });
-        });
+        equipes.forEach(equipe => { newDetails.set(equipe.id, { veiculo: '', observacoes: '' }); });
         setFormacaoDetails(newDetails);
+        setBorrowedMembers(new Map());
 
         const fetchFormacoesDoDia = async () => {
             if (!currentDate) return;
@@ -54,17 +71,29 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
                         return updated;
                     });
 
-                    const presentMemberUuids = new Set<string>();
-                    savedFormations.forEach(f => (f.membrosPresentes || []).forEach(m => presentMemberUuids.add(m.uuid)));
+                    const newBorrowedMap = new Map<string, MembroPresente[]>();
+                    const allPresentMembers: MembroPresente[] = savedFormations.flatMap(f => f.membrosPresentes || []);
                     
+                    allPresentMembers.forEach(member => {
+                        if (member.equipeOrigem) {
+                            const targetTeamId = savedFormations.find(f => f.membrosPresentes.some(m => m.uuid === member.uuid))?.equipeId;
+                            if (targetTeamId) {
+                                const list = newBorrowedMap.get(targetTeamId) || [];
+                                newBorrowedMap.set(targetTeamId, [...list, member]);
+                            }
+                        }
+                    });
+
+                    if (newBorrowedMap.size > 0) {
+                        setBorrowedMembers(newBorrowedMap);
+                    }
+
+                    const presentMemberUuids = new Set<string>(allPresentMembers.map(m => m.uuid));
                     dailyStatuses.forEach((status, memberId) => {
                         if (status.status !== 'Férias') {
                             const isPresent = presentMemberUuids.has(status.uuid);
-                            if (isPresent && status.status !== 'Ativo') {
-                                onStatusUpdate(memberId, 'Ativo');
-                            } else if (!isPresent && status.status === 'Ativo') {
-                                onStatusUpdate(memberId, 'Folga');
-                            }
+                            if (isPresent && status.status !== 'Ativo') { onStatusUpdate(memberId, 'Ativo'); }
+                            else if (!isPresent && status.status === 'Ativo') { onStatusUpdate(memberId, 'Folga'); }
                         }
                     });
                     toast.success('Formação anterior carregada!');
@@ -77,22 +106,25 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
         };
 
         fetchFormacoesDoDia();
+    // A remoção de `onStatusUpdate` da lista de dependências é a correção definitiva.
+    // O useEffect agora só roda quando a data ou a lista de equipes muda.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentDate, equipes]);
     
     const teamMembersWithStatus = useMemo(() => {
-        const map = new Map<string, MembroComStatus[]>();
+        const map = new Map<string, MembroPresente[]>();
         equipes.forEach(equipe => {
-            const allMemberIds = new Set<number | string>([equipe.lider.id, ...equipe.membros.map(m => m.id)]);
-            const members: MembroComStatus[] = [];
-            allMemberIds.forEach(id => {
+            const ownMemberIds = new Set<number | string>([equipe.lider.id, ...equipe.membros.map(m => m.id)]);
+            const ownMembers: MembroPresente[] = [];
+            ownMemberIds.forEach(id => {
                 const status = dailyStatuses.get(id);
-                if (status) members.push(status);
+                if (status) ownMembers.push(status);
             });
-            map.set(equipe.id, members.sort((a,b) => a.name.localeCompare(b.name)));
+            const borrowed = borrowedMembers.get(equipe.id) || [];
+            map.set(equipe.id, [...ownMembers, ...borrowed].sort((a,b) => a.name.localeCompare(b.name)));
         });
         return map;
-    }, [equipes, dailyStatuses]);
+    }, [equipes, dailyStatuses, borrowedMembers]);
 
     const handleDetailsChange = (equipeId: string, details: { veiculo: string; observacoes: string }) => {
         setFormacaoDetails(prev => new Map(prev).set(equipeId, details));
@@ -222,10 +254,13 @@ const FormacaoDiariaPage: React.FC<FormacaoDiariaPageProps> = ({ onNavigate, cur
                                     key={equipe.id}
                                     equipe={equipe}
                                     teamMembersWithStatus={members}
+                                    allTeams={equipes}
+                                    allUsers={usuarios}
                                     groups={groups}
                                     formationDetails={details}
                                     onDetailsChange={(newDetails) => handleDetailsChange(equipe.id, newDetails)}
                                     onStatusUpdate={onStatusUpdate}
+                                    onBorrowMember={onBorrowMember}
                                 />
                             );
                         })}

@@ -27,7 +27,7 @@ import FormacaoDiariaPage from './pages/FormacaoDiariaPage';
 import OrganizarEquipesPage from './pages/OrganizarEquipesPage';
 import FeriasPage from './pages/FeriasPage';
 import UsuariosPage from './pages/UsuariosPage';
-import { Demanda, Atividade, MembroComStatus, MembroStatus, User, Equipe, Grupo, Ferias, OrganizacaoSalva, Role } from './types';
+import { Demanda, Atividade, MembroComStatus, MembroStatus, User, Equipe, Grupo, Ferias, OrganizacaoSalva, Role, MembroPresente } from './types';
 
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyotEdB0INfTNUK9q6MKbHEMQFUzwi5rMYnfZ6tQ7OaQ4ojOa9J3ItXqNsjjEl4XqN0/exec'; // SUBSTITUA PELA SUA URL REAL
 
@@ -76,30 +76,19 @@ const App: React.FC = () => {
   const [dailyStatuses, setDailyStatuses] = useState<Map<number | string, MembroComStatus>>(new Map());
   const [dailyGroups, setDailyGroups] = useState<Map<string, Grupo[]>>(new Map());
   const [feriasList, setFeriasList] = useState<Ferias[]>(DUMMY_FERIAS);
+  const [borrowedMembers, setBorrowedMembers] = useState<Map<string, MembroPresente[]>>(new Map());
 
   const fetchData = async () => {
     if (!isLoadingData) toast.loading('Atualizando dados...', { id: 'refetching-data' });
     else setIsLoadingData(true);
-    
     try {
-      const [usersRes, equipesRes, orgsRes] = await Promise.all([
-        fetch(`${GOOGLE_SCRIPT_URL}?api=usuarios`),
-        fetch(`${GOOGLE_SCRIPT_URL}?api=equipes`),
-        fetch(`${GOOGLE_SCRIPT_URL}?api=organizacaoEquipes`)
-      ]);
+      const [usersRes, equipesRes, orgsRes] = await Promise.all([ fetch(`${GOOGLE_SCRIPT_URL}?api=usuarios`), fetch(`${GOOGLE_SCRIPT_URL}?api=equipes`), fetch(`${GOOGLE_SCRIPT_URL}?api=organizacaoEquipes`) ]);
       const usersResult = await usersRes.json();
       const equipesResult = await equipesRes.json();
       const orgsResult = await orgsRes.json();
-
-      if (usersResult.success) setUsuarios(usersResult.data || []);
-      else throw new Error(usersResult.error || 'Falha ao buscar usuários.');
-
-      if (equipesResult.success) setEquipes(equipesResult.data || []);
-      else throw new Error(equipesResult.error || 'Falha ao buscar equipes.');
-
-      if (orgsResult.success) setHistoricoOrganizacoes(orgsResult.data || []);
-      else throw new Error(orgsResult.error || 'Falha ao buscar histórico de organizações.');
-      
+      if (usersResult.success) setUsuarios(usersResult.data || []); else throw new Error(usersResult.error || 'Falha ao buscar usuários.');
+      if (equipesResult.success) setEquipes(equipesResult.data || []); else throw new Error(equipesResult.error || 'Falha ao buscar equipes.');
+      if (orgsResult.success) setHistoricoOrganizacoes(orgsResult.data || []); else throw new Error(orgsResult.error || 'Falha ao buscar histórico de organizações.');
       if (!isLoadingData) toast.success('Dados atualizados!', { id: 'refetching-data' });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar dados essenciais.';
@@ -109,19 +98,30 @@ const App: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
   useEffect(() => {
     const newStatuses = new Map<number | string, MembroComStatus>();
     const currentDateObj = new Date(currentDate + 'T00:00:00');
+    const allBorrowedUuids = new Set<string>();
+    borrowedMembers.forEach(list => list.forEach(member => allBorrowedUuids.add(member.uuid)));
+
     usuarios.forEach(user => {
         const activeVacation = feriasList.find(f => f.funcionario.id === user.id && (f.status === 'Agendada' || f.status === 'Em Andamento') && currentDateObj >= new Date(f.dataInicio + 'T00:00:00') && currentDateObj <= new Date(f.dataFim + 'T23:59:59'));
-        newStatuses.set(user.id, { ...user, status: activeVacation ? 'Férias' : 'Ativo' });
+        if (activeVacation) {
+            newStatuses.set(user.id, { ...user, status: 'Férias' });
+        } else if (allBorrowedUuids.has(user.uuid)) {
+            newStatuses.set(user.id, { ...user, status: 'Emprestado' });
+        } else {
+            newStatuses.set(user.id, { ...user, status: 'Ativo' });
+        }
     });
     setDailyStatuses(newStatuses);
-  }, [currentDate, feriasList, usuarios]);
+  }, [currentDate, feriasList, usuarios, borrowedMembers]);
+  
+  useEffect(() => {
+    setBorrowedMembers(new Map());
+  }, [currentDate]);
 
   useEffect(() => {
     if (!currentDate || equipes.length === 0) {
@@ -132,23 +132,14 @@ const App: React.FC = () => {
     }
     const dateAsDDMMYYYY = new Date(currentDate + 'T00:00:00').toLocaleDateString('pt-BR', {timeZone: 'UTC'});
     const latestOrgByTeam = new Map<string, OrganizacaoSalva>();
-    historicoOrganizacoes
-        .filter(org => (org.data === currentDate || org.data === dateAsDDMMYYYY))
-        .sort((a, b) => new Date(b.dataSalvamento).getTime() - new Date(a.dataSalvamento).getTime())
-        .forEach(org => {
-            if (!latestOrgByTeam.has(org.equipe.id)) {
-                latestOrgByTeam.set(org.equipe.id, org);
-            }
-        });
+    historicoOrganizacoes.filter(org => (org.data === currentDate || org.data === dateAsDDMMYYYY)).sort((a, b) => new Date(b.dataSalvamento).getTime() - new Date(a.dataSalvamento).getTime()).forEach(org => { if (!latestOrgByTeam.has(org.equipe.id)) latestOrgByTeam.set(org.equipe.id, org); });
     const newGroupsMap = new Map<string, Grupo[]>();
     equipes.forEach(equipe => {
         const savedOrg = latestOrgByTeam.get(equipe.id);
         newGroupsMap.set(equipe.id, savedOrg ? savedOrg.grupos : []);
     });
     setDailyGroups(newGroupsMap);
-    if (latestOrgByTeam.size > 0) {
-        toast.success("Organizações salvas para esta data foram carregadas.");
-    }
+    if (latestOrgByTeam.size > 0) toast.success("Organizações salvas para esta data foram carregadas.");
   }, [currentDate, historicoOrganizacoes, equipes]);
 
   const updateDailyGroups = useCallback((teamId: string, newGroups: Grupo[]) => {
@@ -169,9 +160,9 @@ const App: React.FC = () => {
     });
     if (status !== 'Ativo') {
         setDailyGroups(prevGroupsMap => {
-            const newGroupsMap = new Map(prevGroupsMap);
+            const newGroupsMap = new Map<string, Grupo[]>(prevGroupsMap);
             let mapWasChanged = false;
-            newGroupsMap.forEach((groups: Grupo[], teamId) => {
+            newGroupsMap.forEach((groups, teamId) => {
                 const groupsWithMemberRemoved = groups.map(group => ({ ...group, membros: group.membros.filter(m => m.id !== memberId) })).filter(g => g.membros.length > 0);
                 if (groupsWithMemberRemoved.length === groups.length) return;
                 mapWasChanged = true;
@@ -183,6 +174,35 @@ const App: React.FC = () => {
     }
   }, [dailyStatuses, usuarios]);
 
+  const handleBorrowMember = useCallback((member: User, fromTeam: Equipe, toTeamId: string) => {
+    const memberWithStatus = dailyStatuses.get(member.id);
+    if (!memberWithStatus || memberWithStatus.status === 'Férias') {
+      toast.error(`${member.name} não pode ser emprestado.`);
+      return;
+    }
+    setBorrowedMembers(prev => {
+      const newMap = new Map<string, MembroPresente[]>(prev);
+      const borrowedList = newMap.get(toTeamId) || [];
+      if (borrowedList.some(m => m.uuid === member.uuid)) {
+        toast.error(`${member.name} já foi emprestado para esta equipe.`);
+        return prev;
+      }
+      const borrowedMember: MembroPresente = { ...memberWithStatus, status: 'Ativo', equipeOrigem: { id: fromTeam.id, nome: fromTeam.nome } };
+      newMap.set(toTeamId, [...borrowedList, borrowedMember]);
+      toast.success(`${member.name} emprestado de ${fromTeam.nome}.`);
+      return newMap;
+    });
+    setDailyGroups(prevGroups => {
+        const newGroupsMap = new Map<string, Grupo[]>(prevGroups);
+        const sourceTeamGroups = newGroupsMap.get(fromTeam.id);
+        if (sourceTeamGroups) {
+            const updatedGroups = sourceTeamGroups.map(group => ({...group, membros: group.membros.filter(m => m.id !== member.id)})).filter(g => g.membros.length > 0).map(g => updateGroupName(g, sourceTeamGroups));
+            newGroupsMap.set(fromTeam.id, updatedGroups);
+        }
+        return newGroupsMap;
+    });
+  }, [dailyStatuses]);
+
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
   useEffect(() => {
@@ -193,16 +213,9 @@ const App: React.FC = () => {
   }, []);
   
   const handleNavigate = (page: string, data?: any) => {
-    if (page === 'view_demanda') {
-      setSelectedDemanda(data as Demanda);
-      setNotificationForDemanda(null);
-    } else if (page === 'atividade_controle_criadouros' || page === 'atividade_nebulizacao') {
-      setNotificationForDemanda(data as Atividade);
-      setSelectedDemanda(null);
-    } else {
-      setSelectedDemanda(null);
-      setNotificationForDemanda(null);
-    }
+    if (page === 'view_demanda') { setSelectedDemanda(data as Demanda); setNotificationForDemanda(null); }
+    else if (page === 'atividade_controle_criadouros' || page === 'atividade_nebulizacao') { setNotificationForDemanda(data as Atividade); setSelectedDemanda(null); }
+    else { setSelectedDemanda(null); setNotificationForDemanda(null); }
     setActivePage(page);
   };
   const renderPage = () => {
@@ -243,9 +256,13 @@ const App: React.FC = () => {
                     setCurrentDate={setCurrentDate} 
                     dailyStatuses={dailyStatuses} 
                     onStatusUpdate={updateMemberStatus} 
-                    equipes={equipes} 
-                    dailyGroups={dailyGroups}
-                    historicoOrganizacoes={historicoOrganizacoes} 
+                    equipes={equipes}
+                    usuarios={usuarios}
+                    dailyGroups={dailyGroups} 
+                    historicoOrganizacoes={historicoOrganizacoes}
+                    borrowedMembers={borrowedMembers}
+                    onBorrowMember={handleBorrowMember}
+                    setBorrowedMembers={setBorrowedMembers}
                 />;
       
       case 'organizar_equipes': 

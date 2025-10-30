@@ -1,17 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { MembroComStatus, MembroStatus } from '../types';
-
-// Essas constantes podem viver aqui ou em um arquivo de constantes compartilhado
-const STATUSES: MembroStatus[] = ['Ativo', 'Folga', 'Férias', 'Curso', 'GLM', 'Observação'];
-
-const STATUS_COLORS: Record<MembroStatus, { dot: string; }> = {
-    'Ativo': { dot: 'bg-green-500' },
-    'Folga': { dot: 'bg-sky-500' },
-    'Férias': { dot: 'bg-orange-500' },
-    'Curso': { dot: 'bg-violet-500' },
-    'GLM': { dot: 'bg-slate-500' },
-    'Observação': { dot: 'bg-yellow-500' },
-};
+import React, {useState, useEffect, useRef } from 'react';
+// Importa as constantes centralizadas do seu arquivo de tipos
+import { MembroComStatus, MembroStatus, STATUSES, STATUS_COLORS } from '../types';
 
 interface StatusSelectorProps {
     member: MembroComStatus;
@@ -82,6 +71,8 @@ const StatusSelector: React.FC<StatusSelectorProps> = ({ member, onStatusChange,
         setIsMenuOpen(false);
     };
 
+    // Acessa a cor a partir da constante importada.
+    // A chave 'Emprestado' agora existe, resolvendo o bug.
     const colors = STATUS_COLORS[member.status];
     const displayText = member.status === 'Observação' ? (member.observacao || 'Observação') : member.status;
 
@@ -105,6 +96,7 @@ const StatusSelector: React.FC<StatusSelectorProps> = ({ member, onStatusChange,
                 >
                     {!isEditingObs ? (
                         <ul>
+                            {/* Usa a constante de status importada */}
                             {STATUSES.map(status => (
                                 <li key={status}>
                                     <button
